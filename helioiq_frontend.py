@@ -437,25 +437,18 @@ def render_top_bar() -> None:
             f"</span>"
         )
 
-    st.markdown(
-        f"""
-        <div class="helio-topbar">
-            <div>
-                <span style="font-size:1.35rem; font-weight:800; color:{PALETTE['WHITE']}; letter-spacing:0.04em;">
-                    HELIO<span style="color:{PALETTE['ELECTRIC_CYAN']};">IQ</span>
-                </span>
-                <span class="helio-muted" style="margin-left:0.85rem; font-size:0.92rem;">
-                    Know what your system should do. Know when it doesn't.
-                </span>
-            </div>
-            <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                {ws_html}
-                {badge_html}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    # Collapsed into a single line to guarantee Streamlit does not render a Markdown code block
+    top_bar_html = (
+        f'<div class="helio-topbar">'
+        f'<div>'
+        f'<span style="font-size:1.35rem; font-weight:800; color:{PALETTE["WHITE"]}; letter-spacing:0.04em;">HELIO<span style="color:{PALETTE["ELECTRIC_CYAN"]};">IQ</span></span>'
+        f'<span class="helio-muted" style="margin-left:0.85rem; font-size:0.92rem;">Know what your system should do. Know when it doesn\'t.</span>'
+        f'</div>'
+        f'<div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">{ws_html}{badge_html}</div>'
+        f'</div>'
     )
+    
+    st.markdown(top_bar_html, unsafe_allow_html=True)
 
 
 def render_common_dataset_options(prefix: str) -> Tuple[str, Optional[float], Optional[str], Optional[str]]:
