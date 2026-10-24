@@ -13,21 +13,22 @@ import streamlit as st
 # =====================================================================
 API_BASE_URL = os.getenv("HELIOIQ_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
-# Official HelioIQ Colour Palette Guide
+# HelioIQ Colour Palette Guide constants
 PALETTE = {
-    "BLACK": "#000000",          # Primary page background
-    "MIDNIGHT_NAVY": "#000914",  # Secondary background (panels, cards, sidebar)
-    "WHITE": "#FFFFFF",          # Primary text, key values, headings
-    "ELECTRIC_CYAN": "#1FC3FF",  # Brand accent, active nav, primary actions/series
-    "STEEL_BLUE": "#16324F",     # Borders, subtle dividers, secondary chart fills
-    "MUTED_GREY": "#8CA3B8",     # Secondary text, axis ticks, timestamps, helper text
-    "ICE_BLUE": "#B8EDFF",       # Hover states, soft highlights, pale cyan emphasis
-    "SOFT_WHITE": "#EAF2F8",     # Alternative body text
-    "GREEN": "#35D07F",          # Status: Normal / healthy
-    "AMBER": "#FFC857",          # Status: Watch / caution
-    "RED": "#FF5D6C",            # Status: Significant deviation / investigate
+    "BLACK": "#000000",          
+    "MIDNIGHT_NAVY": "#000914",  
+    "WHITE": "#FFFFFF",          
+    "ELECTRIC_CYAN": "#1FC3FF",  
+    "STEEL_BLUE": "#16324F",     
+    "MUTED_GREY": "#8CA3B8",     
+    "ICE_BLUE": "#B8EDFF",       
+    "SOFT_WHITE": "#EAF2F8",     
+    "GREEN": "#35D07F",          
+    "AMBER": "#FFC857",          
+    "RED": "#FF5D6C",            
 }
 
+# The sidebar keeps the numbers to maintain correct vertical ordering
 PAGES = [
     "01 Home / Dashboard",
     "02 Dataset Management",
@@ -42,7 +43,7 @@ WORKSPACE_REGEX = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 # =====================================================================
-# 2. PAGE SETUP & SLEEK PROFESSIONAL CSS SYSTEM
+# 2. PAGE SETUP & THEME-AWARE CSS (USING NATIVE CONTAINERS)
 # =====================================================================
 st.set_page_config(
     page_title="HelioIQ | Solar PV Performance Intelligence",
@@ -52,317 +53,58 @@ st.set_page_config(
 )
 
 
-def render_html(html_content: str) -> None:
-    """
-    Strip leading indentation from every line before rendering HTML.
-    Prevents Streamlit's Markdown parser from turning HTML into code blocks.
-    """
-    cleaned = "\n".join(line.lstrip() for line in html_content.splitlines() if line.strip())
-    st.markdown(cleaned, unsafe_allow_html=True)
-
-
 def inject_helioiq_css() -> None:
     """
-    Sleek technical dashboard styling adhering to the HelioIQ Colour Palette
-    while dynamically adapting to Streamlit's Light and Dark mode toggles.
+    Styles native Streamlit bordered containers, metrics, sidebar tiles, and buttons
+    using the HelioIQ colour palette while supporting Light and Dark modes.
     """
-    render_html(
-        f"""
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-
-        :root {{
-            --helio-cyan: {PALETTE['ELECTRIC_CYAN']};
-            --helio-ice: {PALETTE['ICE_BLUE']};
-            --helio-steel: {PALETTE['STEEL_BLUE']};
-            --helio-muted: {PALETTE['MUTED_GREY']};
-            --helio-navy: {PALETTE['MIDNIGHT_NAVY']};
-            --helio-black: {PALETTE['BLACK']};
-            --helio-green: {PALETTE['GREEN']};
-            --helio-amber: {PALETTE['AMBER']};
-            --helio-red: {PALETTE['RED']};
-            --helio-card-bg: color-mix(in srgb, var(--secondary-background-color) 92%, {PALETTE['MIDNIGHT_NAVY']} 8%);
-            --helio-border: color-mix(in srgb, {PALETTE['STEEL_BLUE']} 75%, var(--text-color) 25%);
-        }}
-
-        /* Global Typography & Spacing */
-        html, body, .stApp {{
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-        }}
-        .block-container {{
-            padding-top: 1.5rem !important;
-            padding-bottom: 3rem !important;
-            max-width: 1440px !important;
-        }}
-        h1, h2, h3, h4, h5, h6 {{
-            font-family: 'Inter', sans-serif !important;
-            font-weight: 700 !important;
-            letter-spacing: -0.02em !important;
-            color: var(--text-color) !important;
-        }}
-        code, pre {{
-            font-family: 'JetBrains Mono', monospace !important;
-        }}
-
-        /* Sidebar Styling & Sleek Navigation Grid */
-        [data-testid="stSidebar"] {{
-            border-right: 1px solid var(--helio-border) !important;
-        }}
-        /* Hide default red radio circles and style options as a sleek grid of tiles */
-        [data-testid="stSidebar"] div[role="radiogroup"] {{
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 0.42rem !important;
-            margin-top: 0.35rem !important;
-        }}
-        [data-testid="stSidebar"] div[role="radiogroup"] > label {{
-            background-color: var(--helio-card-bg) !important;
-            border: 1px solid var(--helio-border) !important;
-            border-radius: 8px !important;
-            padding: 0.62rem 0.85rem !important;
-            margin: 0 !important;
-            cursor: pointer !important;
-            transition: all 0.18s ease !important;
-            width: 100% !important;
-        }}
-        [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {{
-            display: none !important;
-        }}
-        [data-testid="stSidebar"] div[role="radiogroup"] > label p {{
-            font-size: 0.88rem !important;
-            font-weight: 600 !important;
-            margin: 0 !important;
-            color: var(--text-color) !important;
-        }}
-        [data-testid="stSidebar"] div[role="radiogroup"] > label:hover {{
-            border-color: {PALETTE['ICE_BLUE']} !important;
-            background-color: rgba(31, 195, 255, 0.08) !important;
-            transform: translateX(2px);
-        }}
-        [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {{
-            border-color: {PALETTE['ELECTRIC_CYAN']} !important;
-            border-left: 4px solid {PALETTE['ELECTRIC_CYAN']} !important;
-            background: linear-gradient(90deg, rgba(31, 195, 255, 0.16) 0%, rgba(31, 195, 255, 0.03) 100%) !important;
-            box-shadow: 0 2px 12px rgba(31, 195, 255, 0.12);
-        }}
-        [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p {{
-            color: {PALETTE['ELECTRIC_CYAN']} !important;
-            font-weight: 700 !important;
-        }}
-
-        /* Top Bar */
-        .helio-topbar {{
-            background: var(--helio-card-bg);
-            border: 1px solid var(--helio-border);
-            border-left: 4px solid {PALETTE['ELECTRIC_CYAN']};
-            border-radius: 10px;
-            padding: 0.95rem 1.35rem;
-            margin-bottom: 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
-        }}
-
-        /* Section Eyebrow Labels */
-        .helio-eyebrow {{
-            font-size: 0.73rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: {PALETTE['ELECTRIC_CYAN']};
-            margin-bottom: 0.25rem;
-        }}
-        .helio-muted {{
-            color: {PALETTE['MUTED_GREY']} !important;
-            font-size: 0.88rem;
-            line-height: 1.5;
-        }}
-
-        /* Sleek Bento Grid Cards */
-        .helio-card {{
-            background: var(--helio-card-bg);
-            border: 1px solid var(--helio-border);
-            border-radius: 10px;
-            padding: 1.25rem 1.35rem;
-            margin-bottom: 1rem;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }}
-        .helio-card:hover {{
-            border-color: color-mix(in srgb, {PALETTE['ELECTRIC_CYAN']} 50%, var(--helio-border));
-        }}
-
-        /* Fixed-Height Grid Tile for Module Options */
-        .helio-grid-tile {{
-            background: var(--helio-card-bg);
-            border: 1px solid var(--helio-border);
-            border-top: 3px solid {PALETTE['STEEL_BLUE']};
-            border-radius: 10px;
-            padding: 1.2rem 1.25rem;
-            height: 158px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            margin-bottom: 0.55rem;
-            transition: all 0.2s ease;
-        }}
-        .helio-grid-tile:hover {{
-            border-color: {PALETTE['ELECTRIC_CYAN']};
-            border-top-color: {PALETTE['ELECTRIC_CYAN']};
-            box-shadow: 0 6px 20px rgba(31, 195, 255, 0.1);
-        }}
-        .helio-grid-tile-primary {{
-            border-top: 3px solid {PALETTE['ELECTRIC_CYAN']};
-        }}
-        .helio-tile-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.45rem;
-        }}
-        .helio-tile-step {{
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            padding: 0.15rem 0.55rem;
-            border-radius: 4px;
-            background: rgba(31, 195, 255, 0.12);
-            color: {PALETTE['ELECTRIC_CYAN']};
-            border: 1px solid rgba(31, 195, 255, 0.3);
-        }}
-        .helio-tile-title {{
-            font-size: 1.05rem;
-            font-weight: 700;
-            color: var(--text-color);
-            margin: 0 0 0.35rem 0;
-        }}
-        .helio-tile-desc {{
-            font-size: 0.84rem;
-            color: {PALETTE['MUTED_GREY']};
-            line-height: 1.45;
-            margin: 0;
-        }}
-
-        /* Scientific Guardrail Banner */
-        .helio-guardrail {{
-            background: var(--helio-card-bg);
-            border: 1px solid var(--helio-border);
-            border-left: 4px solid {PALETTE['ELECTRIC_CYAN']};
-            border-radius: 8px;
-            padding: 0.85rem 1.15rem;
-            margin-bottom: 1.25rem;
-            font-size: 0.88rem;
-            line-height: 1.5;
-        }}
-
-        /* Metric Cards (KPI Grid) */
-        [data-testid="stMetric"] {{
-            background: var(--helio-card-bg);
-            border: 1px solid var(--helio-border);
-            border-radius: 10px;
-            padding: 0.95rem 1.15rem !important;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-        }}
-        [data-testid="stMetricLabel"] {{
-            color: {PALETTE['MUTED_GREY']} !important;
-            font-size: 0.78rem !important;
-            font-weight: 600 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.05em !important;
-        }}
-        [data-testid="stMetricValue"] {{
-            font-weight: 800 !important;
-            font-size: 1.5rem !important;
-        }}
-
-        /* Buttons: Electric Cyan fill + Midnight Navy (#000914) text per accessibility guide */
-        .stButton > button, .stFormSubmitButton > button {{
-            background-color: {PALETTE['ELECTRIC_CYAN']} !important;
-            color: {PALETTE['MIDNIGHT_NAVY']} !important;
-            border: 1px solid {PALETTE['ELECTRIC_CYAN']} !important;
-            font-weight: 700 !important;
-            font-size: 0.86rem !important;
-            letter-spacing: 0.01em !important;
-            border-radius: 8px !important;
-            padding: 0.5rem 1.1rem !important;
-            transition: all 0.18s ease !important;
-        }}
-        .stButton > button *, .stFormSubmitButton > button * {{
-            color: {PALETTE['MIDNIGHT_NAVY']} !important;
-            font-weight: 700 !important;
-        }}
-        .stButton > button:hover, .stFormSubmitButton > button:hover {{
-            background-color: {PALETTE['ICE_BLUE']} !important;
-            border-color: {PALETTE['ICE_BLUE']} !important;
-            color: {PALETTE['BLACK']} !important;
-            box-shadow: 0 4px 14px rgba(31, 195, 255, 0.28) !important;
-            transform: translateY(-1px);
-        }}
-        .stButton > button:disabled, .stFormSubmitButton > button:disabled {{
-            background-color: rgba(22, 50, 79, 0.35) !important;
-            border-color: var(--helio-border) !important;
-            color: {PALETTE['MUTED_GREY']} !important;
-            opacity: 0.6 !important;
-            transform: none !important;
-            box-shadow: none !important;
-        }}
-        .stButton > button:disabled *, .stFormSubmitButton > button:disabled * {{
-            color: {PALETTE['MUTED_GREY']} !important;
-        }}
-
-        /* Inputs, File Uploaders & Expanders */
-        [data-testid="stFileUploaderDropzone"] {{
-            background: var(--helio-card-bg) !important;
-            border: 1px dashed {PALETTE['STEEL_BLUE']} !important;
-            border-radius: 10px !important;
-        }}
-        [data-testid="stFileUploaderDropzone"]:hover {{
-            border-color: {PALETTE['ELECTRIC_CYAN']} !important;
-        }}
-        [data-testid="stExpander"] {{
-            background: var(--helio-card-bg) !important;
-            border: 1px solid var(--helio-border) !important;
-            border-radius: 8px !important;
-        }}
-
-        /* Status Badges (Colour + Icon + Label) */
-        .status-badge {{
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.28rem 0.75rem;
-            border-radius: 999px;
-            font-size: 0.76rem;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-        }}
-        .status-healthy {{
-            background-color: rgba(53, 208, 127, 0.14);
-            color: {PALETTE['GREEN']} !important;
-            border: 1px solid {PALETTE['GREEN']};
-        }}
-        .status-caution {{
-            background-color: rgba(255, 200, 87, 0.14);
-            color: {PALETTE['AMBER']} !important;
-            border: 1px solid {PALETTE['AMBER']};
-        }}
-        .status-investigate {{
-            background-color: rgba(255, 93, 108, 0.14);
-            color: {PALETTE['RED']} !important;
-            border: 1px solid {PALETTE['RED']};
-        }}
-        .status-neutral {{
-            background-color: rgba(31, 195, 255, 0.12);
-            color: {PALETTE['ELECTRIC_CYAN']} !important;
-            border: 1px solid {PALETTE['STEEL_BLUE']};
-        }}
-        </style>
-        """
-    )
+    css = """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    html, body, .stApp { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important; }
+    .block-container { padding-top: 1.4rem !important; padding-bottom: 3rem !important; max-width: 1420px !important; }
+    h1, h2, h3, h4, h5, h6 { font-family: 'Inter', sans-serif !important; font-weight: 700 !important; letter-spacing: -0.02em !important; }
+    
+    /* Native Bordered Containers (Bento Grid Cards) */
+    [data-testid="stVerticalBlockBorderWrapper"] { background-color: color-mix(in srgb, var(--secondary-background-color) 90%, __MIDNIGHT_NAVY__ 10%) !important; border: 1px solid color-mix(in srgb, __STEEL_BLUE__ 75%, var(--text-color) 25%) !important; border-radius: 10px !important; padding: 0.35rem !important; transition: border-color 0.2s ease, box-shadow 0.2s ease !important; }
+    [data-testid="stVerticalBlockBorderWrapper"]:hover { border-color: __ELECTRIC_CYAN__ !important; box-shadow: 0 4px 18px rgba(31, 195, 255, 0.08) !important; }
+    
+    /* Metric Containers */
+    [data-testid="stMetric"] { background-color: color-mix(in srgb, var(--secondary-background-color) 90%, __MIDNIGHT_NAVY__ 10%) !important; border: 1px solid color-mix(in srgb, __STEEL_BLUE__ 75%, var(--text-color) 25%) !important; border-radius: 10px !important; padding: 0.9rem 1.1rem !important; }
+    [data-testid="stMetricLabel"] { color: __MUTED_GREY__ !important; font-size: 0.78rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; }
+    [data-testid="stMetricValue"] { font-weight: 800 !important; font-size: 1.45rem !important; }
+    
+    /* Sidebar Navigation Grid Tiles */
+    [data-testid="stSidebar"] { border-right: 1px solid color-mix(in srgb, __STEEL_BLUE__ 75%, var(--text-color) 25%) !important; }
+    [data-testid="stSidebar"] div[role="radiogroup"] { display: grid !important; grid-template-columns: 1fr !important; gap: 0.4rem !important; }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label { background-color: color-mix(in srgb, var(--secondary-background-color) 88%, __MIDNIGHT_NAVY__ 12%) !important; border: 1px solid color-mix(in srgb, __STEEL_BLUE__ 70%, var(--text-color) 30%) !important; border-radius: 8px !important; padding: 0.6rem 0.85rem !important; margin: 0 !important; cursor: pointer !important; transition: all 0.16s ease !important; width: 100% !important; }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label p { font-size: 0.88rem !important; font-weight: 600 !important; margin: 0 !important; color: var(--text-color) !important; }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover { border-color: __ICE_BLUE__ !important; background-color: rgba(31, 195, 255, 0.08) !important; }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) { border-color: __ELECTRIC_CYAN__ !important; border-left: 4px solid __ELECTRIC_CYAN__ !important; background-color: rgba(31, 195, 255, 0.14) !important; }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p { color: __ELECTRIC_CYAN__ !important; font-weight: 700 !important; }
+    
+    /* Primary Buttons */
+    .stButton > button, .stFormSubmitButton > button { background-color: __ELECTRIC_CYAN__ !important; color: __MIDNIGHT_NAVY__ !important; border: 1px solid __ELECTRIC_CYAN__ !important; font-weight: 700 !important; font-size: 0.88rem !important; border-radius: 8px !important; padding: 0.5rem 1.1rem !important; transition: all 0.16s ease !important; }
+    .stButton > button *, .stFormSubmitButton > button * { color: __MIDNIGHT_NAVY__ !important; font-weight: 700 !important; background: transparent !important; }
+    .stButton > button:hover, .stFormSubmitButton > button:hover { background-color: __ICE_BLUE__ !important; border-color: __ICE_BLUE__ !important; color: __BLACK__ !important; box-shadow: 0 4px 12px rgba(31, 195, 255, 0.25) !important; }
+    .stButton > button:disabled, .stFormSubmitButton > button:disabled { background-color: rgba(22, 50, 79, 0.35) !important; border-color: rgba(140, 163, 184, 0.3) !important; color: __MUTED_GREY__ !important; opacity: 0.6 !important; box-shadow: none !important; }
+    .stButton > button:disabled *, .stFormSubmitButton > button:disabled * { color: __MUTED_GREY__ !important; }
+    
+    /* Status Badges */
+    .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.7rem; border-radius: 999px; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.03em; }
+    .status-healthy { background-color: rgba(53, 208, 127, 0.15); color: __GREEN__ !important; border: 1px solid __GREEN__; }
+    .status-caution { background-color: rgba(255, 200, 87, 0.15); color: __AMBER__ !important; border: 1px solid __AMBER__; }
+    .status-investigate { background-color: rgba(255, 93, 108, 0.15); color: __RED__ !important; border: 1px solid __RED__; }
+    .status-neutral { background-color: rgba(31, 195, 255, 0.12); color: __ELECTRIC_CYAN__ !important; border: 1px solid __STEEL_BLUE__; }
+    </style>
+    """
+    
+    for key, hex_code in PALETTE.items():
+        css = css.replace(f"__{key}__", hex_code)
+        
+    st.markdown(css, unsafe_allow_html=True)
 
 
 # =====================================================================
@@ -400,8 +142,31 @@ def navigate_to(page_name: str, workspace: Optional[str] = None, version: Option
 
 
 # =====================================================================
-# 4. API COMMUNICATION & ERROR HANDLING
+# 4. API COMMUNICATION & NATIVE ERROR DISPLAY
 # =====================================================================
+def format_form_value(val: Any) -> str:
+    """Format form values cleanly so integer floats like 2.0 are sent as '2' if whole."""
+    if isinstance(val, (dict, list)):
+        return json.dumps(val)
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if isinstance(val, float) and val.is_integer():
+        return str(int(val))
+    return str(val)
+
+
+def sanitize_api_message(msg: str) -> str:
+    """Strip raw Python/dictionary syntax from API messages for a cleaner UI."""
+    text = str(msg)
+    text = text.replace("config.plant['location']", "Plant Location Override")
+    text = text.replace("config.plant['rated_power_kw']", "Rated Capacity (kW) Setting")
+    text = text.replace("PowerOptions(rated_power_w=...)", "Power Options JSON (Rated Power)")
+    text = text.replace("prepare_pv_data(..., include_power=True)", "dataset preparation config")
+    text = text.replace("dc_power_derived_total_w", "Derived DC Power")
+    text = text.replace("dc_power", "Measured DC Power")
+    return text
+
+
 def api_call(
     method: str,
     endpoint: str,
@@ -416,11 +181,15 @@ def api_call(
     cleaned_data = None
     if data:
         cleaned_data = {
-            k: (json.dumps(v) if isinstance(v, (dict, list)) else str(v))
+            k: format_form_value(v)
             for k, v in data.items()
             if v is not None and v != ""
         }
-    cleaned_params = {k: v for k, v in (params or {}).items() if v is not None and v != ""}
+    cleaned_params = {
+        k: format_form_value(v)
+        for k, v in (params or {}).items()
+        if v is not None and v != ""
+    }
 
     try:
         response = requests.request(
@@ -436,13 +205,13 @@ def api_call(
         return (
             False,
             0,
-            f"Cannot connect to HelioIQ API at {API_BASE_URL}. Ensure Uvicorn is running (`uvicorn app.main:app --reload`).",
+            f"Cannot connect to HelioIQ API at {API_BASE_URL}. Ensure Uvicorn is running (uvicorn app.main:app --reload).",
         )
     except requests.exceptions.Timeout:
         return (
             False,
             0,
-            f"Request to {endpoint} timed out after {timeout}s. Try a smaller date window or representative sample.",
+            f"Request to {endpoint} timed out after {timeout}s. Try a smaller date window or sample CSV.",
         )
     except requests.exceptions.RequestException as exc:
         return False, 0, f"Network error calling {endpoint}: {exc}"
@@ -458,65 +227,59 @@ def api_call(
 
 
 def render_api_error(status_code: int, payload: Any, context: str = "API Request") -> None:
-    """Render readable, actionable error states from the API's `detail` field."""
+    """Renders API errors using native Streamlit containers and alerts."""
     detail = payload.get("detail", payload) if isinstance(payload, dict) else str(payload)
-    if isinstance(detail, list):
-        formatted_items = []
-        for item in detail:
-            if isinstance(item, dict):
-                loc = " -> ".join(str(x) for x in item.get("loc", []))
-                msg = item.get("msg", str(item))
-                formatted_items.append(f"- **{loc}**: {msg}" if loc else f"- {msg}")
-            else:
-                formatted_items.append(f"- {item}")
-        detail_str = "\n".join(formatted_items)
-    elif isinstance(detail, dict):
-        detail_str = json.dumps(detail, indent=2)
-    else:
-        detail_str = str(detail)
 
-    hint = ""
-    if status_code == 0:
-        hint = "Verify the FastAPI server is running at `http://127.0.0.1:8000`."
-    elif status_code == 404:
-        hint = "404 Not Found: Train a model first and use the exact workspace and version returned by the API."
-    elif status_code == 422:
-        hint = "422 Unprocessable Entity: Check required form fields, dataset profile, dates, JSON syntax, or CSV columns."
-    elif status_code == 503:
-        hint = "503 Service Unavailable: The API could not load `HelioIQ_Backend`. Check `HELIOIQ_BACKEND_PATH`."
+    with st.container(border=True):
+        st.error(f"■ **{context} Failed** {f'(HTTP {status_code})' if status_code else '(Network Error)'}")
 
-    render_html(
-        f"""
-        <div class="helio-card" style="border-left: 4px solid {PALETTE['RED']};">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>{context} Failed {f'(HTTP {status_code})' if status_code else ''}</strong>
-                <span class="status-badge status-investigate">■ ERROR {status_code or 'NETWORK'}</span>
-            </div>
-            <div style="margin-top:0.6rem; white-space:pre-wrap;">{detail_str}</div>
-            {f'<div class="helio-muted" style="margin-top:0.5rem;">💡 <strong>Troubleshooting:</strong> {hint}</div>' if hint else ''}
-        </div>
-        """
-    )
+        if isinstance(detail, list):
+            for item in detail:
+                if isinstance(item, dict):
+                    loc = " → ".join(str(x) for x in item.get("loc", []))
+                    msg = item.get("msg", str(item))
+                    st.markdown(f"- **{loc}**: {sanitize_api_message(msg)}" if loc else f"- {sanitize_api_message(msg)}")
+                else:
+                    st.markdown(f"- {sanitize_api_message(item)}")
+        elif isinstance(detail, dict):
+            msg = detail.get("message") or detail.get("error") or detail.get("detail")
+            if msg:
+                st.write(sanitize_api_message(msg))
+            st.json(detail)
+        else:
+            st.write(sanitize_api_message(detail))
+
+        if status_code == 0:
+            st.caption("💡 **Troubleshooting:** Verify the FastAPI server is running in your first terminal at http://127.0.0.1:8000.")
+        elif status_code == 404:
+            st.caption("💡 **Troubleshooting (404):** Train a model first and use the exact workspace and version returned by the API.")
+        elif status_code == 422:
+            st.caption("💡 **Troubleshooting (422):** Check whether your CSV matches the selected Dataset Profile ('trieste_q2' vs 'generic'), or check required columns, dates, and JSON configuration.")
+        elif status_code == 503:
+            st.caption("💡 **Troubleshooting (503):** The API could not load HelioIQ_Backend. Check HELIOIQ_BACKEND_PATH and restart Uvicorn.")
 
 
-def format_status_badge(status_val: Any) -> str:
-    """Map API status strings to Green / Amber / Red badges with icon + text label."""
+def render_status_pill(status_val: Any) -> None:
+    """Render a single-line status badge with icon + text label."""
     raw = str(status_val or "unknown").strip()
     low = raw.lower()
     if any(k in low for k in ["ok", "healthy", "normal", "valid", "success", "low", "none", "pass"]):
-        return f'<span class="status-badge status-healthy">● {raw.upper()} (NORMAL)</span>'
-    if any(k in low for k in ["degraded", "watch", "caution", "warning", "warn", "medium", "moderate"]):
-        return f'<span class="status-badge status-caution">▲ {raw.upper()} (WATCH)</span>'
-    if any(k in low for k in ["error", "fail", "invalid", "high", "critical", "severe", "anomaly", "flagged", "investigate", "significant"]):
-        return f'<span class="status-badge status-investigate">■ {raw.upper()} (INVESTIGATE)</span>'
-    return f'<span class="status-badge status-neutral">◆ {raw.upper()}</span>'
+        cls, sym, tag = "status-healthy", "●", "NORMAL"
+    elif any(k in low for k in ["degraded", "watch", "caution", "warning", "warn", "medium", "moderate"]):
+        cls, sym, tag = "status-caution", "▲", "WATCH"
+    elif any(k in low for k in ["error", "fail", "invalid", "high", "critical", "severe", "anomaly", "flagged", "investigate", "significant"]):
+        cls, sym, tag = "status-investigate", "■", "INVESTIGATE"
+    else:
+        cls, sym, tag = "status-neutral", "◆", "INFO"
+
+    html = f'<div style="margin-bottom:0.75rem;"><span class="status-badge {cls}">{sym} {raw.upper()} ({tag})</span></div>'
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # =====================================================================
 # 5. SHARED UI & PLOTLY CHART HELPERS
 # =====================================================================
 def apply_helioiq_plotly_theme(fig: go.Figure, title: str, xaxis_title: str, yaxis_title: str) -> go.Figure:
-    """Style Plotly charts with HelioIQ accents and Steel Blue gridlines."""
     fig.update_layout(
         title=dict(text=title, font=dict(size=15)),
         font=dict(family="Inter, Segoe UI, sans-serif"),
@@ -532,10 +295,7 @@ def apply_helioiq_plotly_theme(fig: go.Figure, title: str, xaxis_title: str, yax
             linecolor=PALETTE["STEEL_BLUE"],
             zerolinecolor=PALETTE["STEEL_BLUE"],
         ),
-        legend=dict(
-            bordercolor=PALETTE["STEEL_BLUE"],
-            borderwidth=1,
-        ),
+        legend=dict(bordercolor=PALETTE["STEEL_BLUE"], borderwidth=1),
         hovermode="x unified",
         margin=dict(l=50, r=30, t=55, b=50),
     )
@@ -543,7 +303,7 @@ def apply_helioiq_plotly_theme(fig: go.Figure, title: str, xaxis_title: str, yax
 
 
 def render_top_bar() -> None:
-    """Render a persistent, sleek top header bar across all pages."""
+    """Consistent top bar using a native bordered container and single-line badge."""
     ok, _, health = api_call("GET", "/health", timeout=5)
     if ok and isinstance(health, dict):
         st.session_state["health_data"] = health
@@ -561,49 +321,39 @@ def render_top_bar() -> None:
     ws_html = ""
     if st.session_state.get("active_workspace"):
         ver = st.session_state.get("active_model_version") or "latest"
-        ws_html = (
-            f'<span class="status-badge status-neutral">'
-            f'◆ WORKSPACE: {st.session_state["active_workspace"]} ({ver})'
-            f"</span>"
-        )
+        ws_html = f'<span class="status-badge status-neutral" style="margin-right:0.5rem;">◆ WORKSPACE: {st.session_state["active_workspace"]} ({ver})</span>'
 
-    render_html(
-        f"""
-        <div class="helio-topbar">
-            <div style="display:flex; align-items:baseline; gap:0.9rem; flex-wrap:wrap;">
-                <span style="font-size:1.4rem; font-weight:800; letter-spacing:0.04em;">
-                    HELIO<span style="color:{PALETTE['ELECTRIC_CYAN']};">IQ</span>
-                </span>
-                <span class="helio-muted" style="font-size:0.9rem;">
-                    Know what your system should do. Know when it doesn't.
-                </span>
-            </div>
-            <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                {ws_html}
-                {badge_html}
-            </div>
-        </div>
-        """
-    )
+    with st.container(border=True):
+        c_left, c_right = st.columns([3, 2])
+        with c_left:
+            st.markdown(
+                f'<div style="padding:0.2rem 0;"><span style="font-size:1.35rem; font-weight:800; letter-spacing:0.04em;">HELIO<span style="color:{PALETTE["ELECTRIC_CYAN"]};">IQ</span></span> <span style="color:{PALETTE["MUTED_GREY"]}; margin-left:0.75rem; font-size:0.9rem;">Know what your system should do. Know when it doesn\'t.</span></div>',
+                unsafe_allow_html=True,
+            )
+        with c_right:
+            st.markdown(
+                f'<div style="text-align:right; padding:0.25rem 0;">{ws_html}{badge_html}</div>',
+                unsafe_allow_html=True,
+            )
 
 
 def render_common_dataset_options(prefix: str) -> Tuple[str, Optional[float], Optional[str], Optional[str]]:
-    """Shared optional dataset configuration controls arranged in a clean 2-column grid."""
+    """Shared dataset configuration controls in a clean 2-column grid without backtick code pills."""
     col1, col2 = st.columns(2)
     with col1:
         dataset_type = st.selectbox(
-            "Dataset Profile (`dataset`)",
+            "Dataset Profile",
             options=["trieste_q2", "generic"],
             index=0,
             key=f"{prefix}_dataset",
-            help="Use 'trieste_q2' (default) for the Trieste dataset or 'generic' for custom schemas.",
+            help="Select 'trieste_q2' for the Trieste dataset or 'generic' for custom CSV column schemas.",
         )
     with col2:
         specify_utc = st.checkbox(
-            "Specify Fixed UTC Offset (`utc_offset_hours`)",
+            "Specify Fixed UTC Offset (Hours)",
             value=False,
             key=f"{prefix}_specify_utc",
-            help="Required when computing solar-position features. Do not guess the offset.",
+            help="Enable when computing solar-position features. Do not guess the UTC offset.",
         )
         utc_offset = None
         if specify_utc:
@@ -616,20 +366,20 @@ def render_common_dataset_options(prefix: str) -> Tuple[str, Optional[float], Op
                 key=f"{prefix}_utc_offset",
             )
 
-    with st.expander("Advanced Backend Configuration (`column_map` / `power_options` JSON)", expanded=False):
+    with st.expander("Advanced Backend Configuration (Optional Column Map & Power Options JSON)", expanded=False):
         st.caption("Optional JSON strings passed directly to the backend without frontend modification.")
         g1, g2 = st.columns(2)
         with g1:
             c_map = st.text_area(
-                "Column Map JSON (`column_map`)",
+                "Column Map JSON",
                 placeholder='{"timestamp": "DateTime", "irradiance": "POA"}',
                 height=72,
                 key=f"{prefix}_colmap",
             )
         with g2:
             p_opts = st.text_area(
-                "Power Options JSON (`power_options`)",
-                placeholder='{"dc_scaling": 1.0}',
+                "Power Options JSON",
+                placeholder='{"dc_scaling": 1.0, "rated_power_w": 10000}',
                 height=72,
                 key=f"{prefix}_poweropts",
             )
@@ -648,7 +398,7 @@ def validate_json_string(raw_text: Optional[str], field_label: str) -> bool:
         json.loads(raw_text)
         return True
     except ValueError as exc:
-        st.error(f"Invalid JSON in `{field_label}`: {exc}")
+        st.error(f"Invalid JSON in {field_label}: {exc}")
         return False
 
 
@@ -683,38 +433,29 @@ def extract_rows_from_payload(payload: Dict[str, Any]) -> Tuple[Optional[List[Di
 # =====================================================================
 
 # ---------------------------------------------------------------------
-# PAGE 01: HOME / DASHBOARD (BENTO GRID ARCHITECTURE)
+# PAGE 01: HOME / DASHBOARD 
 # ---------------------------------------------------------------------
 def page_home() -> None:
-    render_html('<div class="helio-eyebrow">OVERVIEW & TELEMETRY</div>')
-    st.markdown("## 01 Home / Dashboard")
+    st.caption("OVERVIEW & TELEMETRY")
+    st.markdown("## Home / Dashboard")
 
-    render_html(
-        f"""
-        <div class="helio-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
-                <div style="max-width:780px;">
-                    <h3 style="margin:0 0 0.45rem 0;">Solar PV Performance Intelligence Platform</h3>
-                    <p class="helio-muted" style="margin:0;">
-                        HelioIQ estimates expected solar PV power under observed environmental conditions, compares expected power with observed or defensibly derived power, flags persistent deviations for investigation, and supports hypothetical what-if simulation.
-                    </p>
-                </div>
-                <div style="text-align:right;">
-                    <div class="helio-eyebrow">CONNECTED ENDPOINT</div>
-                    <code>{API_BASE_URL}</code>
-                </div>
-            </div>
-        </div>
-        """
-    )
+    with st.container(border=True):
+        c_welcome, c_url = st.columns([4, 1])
+        with c_welcome:
+            st.markdown("#### Solar PV Performance Intelligence Platform")
+            st.write(
+                "HelioIQ estimates expected solar PV power under observed environmental conditions, "
+                "compares expected power with observed or defensibly derived power, flags persistent "
+                "deviations for investigation, and supports hypothetical what-if simulation."
+            )
+        with c_url:
+            st.caption("CONNECTED API")
+            st.code(API_BASE_URL, language=None)
 
-    # 1. Live Health Telemetry Grid
     col_h1, col_h2 = st.columns([4, 1])
     with col_h1:
-        render_html('<div class="helio-eyebrow">SYSTEM READINESS</div>')
-        st.markdown("### Live API & Backend Connection (`GET /health`)")
+        st.markdown("### Live API & Backend Connection")
     with col_h2:
-        st.write("")
         if st.button("↻ Refresh Status", use_container_width=True):
             st.rerun()
 
@@ -730,228 +471,112 @@ def page_home() -> None:
         m2.metric("Service Status", status_str.upper())
         m3.metric("Backend Engine", "Available (Loaded)" if backend_avail else "Degraded / Unavailable")
 
-        with st.expander("Inspect Raw `/health` Telemetry JSON", expanded=False):
+        with st.expander("View Raw Health Response Payload", expanded=False):
             st.json(health_payload)
     else:
         render_api_error(status_code, health_payload, context="GET /health Check")
 
     st.markdown("---")
 
-    # 2. 6-Module Bento Grid (3 Columns × 2 Rows)
-    render_html('<div class="helio-eyebrow">APPLICATION MODULES</div>')
+    st.caption("APPLICATION MODULES")
     st.markdown("### Core Workflow & Analysis Grid")
 
-    grid_modules = [
-        {
-            "step": "MODULE 02 • CORE STEP 1",
-            "icon": "📂",
-            "title": "Validate Dataset",
-            "desc": "Upload a solar PV CSV file, verify schema compatibility, and inspect data quality reports.",
-            "btn": "Open Dataset Management →",
-            "target": "02 Dataset Management",
-            "primary": True,
-            "key": "grid_mod_02",
-        },
-        {
-            "step": "MODULE 03 • CORE STEP 2",
-            "icon": "🧠",
-            "title": "Train Models",
-            "desc": "Train and compare Linear Regression and Random Forest models on chronological hold-out splits.",
-            "btn": "Open Model Lab →",
-            "target": "03 Model Lab",
-            "primary": True,
-            "key": "grid_mod_03",
-        },
-        {
-            "step": "MODULE 04 • CORE STEP 3",
-            "icon": "📈",
-            "title": "Analyse Performance",
-            "desc": "Compare expected model power against observed or derived DC power across time-series windows.",
-            "btn": "Open Performance Analysis →",
-            "target": "04 Performance Analysis",
-            "primary": True,
-            "key": "grid_mod_04",
-        },
-        {
-            "step": "MODULE 05 • DIAGNOSTICS",
-            "icon": "🔍",
-            "title": "Anomaly Detection",
-            "desc": "Identify persistent deviations and flag potential underperformance periods for investigation.",
-            "btn": "Open Anomaly Detection →",
-            "target": "05 Anomaly Detection",
-            "primary": False,
-            "key": "grid_mod_05",
-        },
-        {
-            "step": "MODULE 06 • SCENARIOS",
-            "icon": "⚡",
-            "title": "What-if Simulator",
-            "desc": "Adjust irradiance and temperature parameters to run hypothetical model re-predictions.",
-            "btn": "Open What-if Simulator →",
-            "target": "06 What-if Simulator",
-            "primary": False,
-            "key": "grid_mod_06",
-        },
-        {
-            "step": "MODULE 07 • REGISTRY",
-            "icon": "🗂️",
-            "title": "Models & Workspaces",
-            "desc": "Browse saved model versions and inspect evaluation metadata for known workspaces.",
-            "btn": "Open Models & Workspaces →",
-            "target": "07 Models & Workspaces",
-            "primary": False,
-            "key": "grid_mod_07",
-        },
+    modules = [
+        ("MODULE 02 • STEP 1", "1. Validate Dataset", "Upload a solar PV CSV file, verify schema compatibility, and inspect data quality reports.", "Open Dataset Management →", "02 Dataset Management", "mod_2"),
+        ("MODULE 03 • STEP 2", "2. Train Models", "Train and compare Linear Regression and Random Forest models on chronological hold-out splits.", "Open Model Lab →", "03 Model Lab", "mod_3"),
+        ("MODULE 04 • STEP 3", "3. Analyse Performance", "Compare expected model power against observed or derived DC power across time-series windows.", "Open Performance Analysis →", "04 Performance Analysis", "mod_4"),
+        ("MODULE 05 • DIAGNOSTICS", "4. Anomaly Detection", "Identify persistent deviations and flag potential underperformance periods for investigation.", "Open Anomaly Detection →", "05 Anomaly Detection", "mod_5"),
+        ("MODULE 06 • SCENARIOS", "5. What-if Simulator", "Adjust irradiance and temperature parameters to run hypothetical model re-predictions.", "Open What-if Simulator →", "06 What-if Simulator", "mod_6"),
+        ("MODULE 07 • REGISTRY", "6. Models & Workspaces", "Browse saved model versions and inspect evaluation metadata for known workspaces.", "Open Models & Workspaces →", "07 Models & Workspaces", "mod_7"),
     ]
 
-    # Render Row 1 (Primary Workflow Modules)
-    row1_cols = st.columns(3)
-    for idx, mod in enumerate(grid_modules[:3]):
-        with row1_cols[idx]:
-            tile_cls = "helio-grid-tile helio-grid-tile-primary" if mod["primary"] else "helio-grid-tile"
-            render_html(
-                f"""
-                <div class="{tile_cls}">
-                    <div>
-                        <div class="helio-tile-header">
-                            <span class="helio-tile-step">{mod['step']}</span>
-                            <span style="font-size:1.15rem;">{mod['icon']}</span>
-                        </div>
-                        <div class="helio-tile-title">{mod['title']}</div>
-                        <p class="helio-tile-desc">{mod['desc']}</p>
-                    </div>
-                </div>
-                """
-            )
-            if st.button(mod["btn"], key=mod["key"], use_container_width=True):
-                navigate_to(mod["target"])
+    row1 = st.columns(3)
+    for idx in range(3):
+        tag, title, desc, btn_label, target, key = modules[idx]
+        with row1[idx]:
+            with st.container(border=True, height=215):
+                st.caption(tag)
+                st.markdown(f"#### {title}")
+                st.write(desc)
+            if st.button(btn_label, key=key, use_container_width=True):
+                navigate_to(target)
 
-    st.write("")
-
-    # Render Row 2 (Secondary / Shortcut Modules)
-    row2_cols = st.columns(3)
-    for idx, mod in enumerate(grid_modules[3:]):
-        with row2_cols[idx]:
-            tile_cls = "helio-grid-tile helio-grid-tile-primary" if mod["primary"] else "helio-grid-tile"
-            render_html(
-                f"""
-                <div class="{tile_cls}">
-                    <div>
-                        <div class="helio-tile-header">
-                            <span class="helio-tile-step">{mod['step']}</span>
-                            <span style="font-size:1.15rem;">{mod['icon']}</span>
-                        </div>
-                        <div class="helio-tile-title">{mod['title']}</div>
-                        <p class="helio-tile-desc">{mod['desc']}</p>
-                    </div>
-                </div>
-                """
-            )
-            if st.button(mod["btn"], key=mod["key"], use_container_width=True):
-                navigate_to(mod["target"])
+    row2 = st.columns(3)
+    for idx in range(3, 6):
+        tag, title, desc, btn_label, target, key = modules[idx]
+        with row2[idx - 3]:
+            with st.container(border=True, height=215):
+                st.caption(tag)
+                st.markdown(f"#### {title}")
+                st.write(desc)
+            if st.button(btn_label, key=key, use_container_width=True):
+                navigate_to(target)
 
     st.markdown("---")
-
-    # 3. Session Context Grid (2-Column Equal Height Cards)
-    render_html('<div class="helio-eyebrow">SESSION TELEMETRY</div>')
+    st.caption("SESSION TELEMETRY")
     st.markdown("### Current Session Context & Latest API Results")
     col_ctx1, col_ctx2 = st.columns(2)
 
     with col_ctx1:
-        if st.session_state.get("active_workspace"):
-            render_html(
-                f"""
-                <div class="helio-card" style="min-height:140px;">
-                    <div class="helio-eyebrow">ACTIVE MODEL REGISTRY</div>
-                    <h4 style="margin:0.2rem 0 0.6rem 0;">Workspace & Model Context</h4>
-                    <p style="margin:0.2rem 0;"><strong>Workspace:</strong> <code>{st.session_state['active_workspace']}</code></p>
-                    <p style="margin:0.2rem 0;"><strong>Confirmed Version:</strong> <code>{st.session_state.get('active_model_version') or 'latest'}</code></p>
-                </div>
-                """
-            )
-        else:
-            render_html(
-                """
-                <div class="helio-card" style="min-height:140px;">
-                    <div class="helio-eyebrow">ACTIVE MODEL REGISTRY</div>
-                    <h4 style="margin:0.2rem 0 0.5rem 0;">No Active Workspace / Model Yet</h4>
-                    <p class="helio-muted" style="margin:0;">
-                        No model has been trained or queried in this session yet. Train a new model in <strong>03 Model Lab</strong> or inspect an existing workspace in <strong>07 Models & Workspaces</strong>.
-                    </p>
-                </div>
-                """
-            )
+        with st.container(border=True, height=165):
+            st.caption("ACTIVE MODEL REGISTRY")
+            if st.session_state.get("active_workspace"):
+                st.markdown("#### Active Workspace & Model")
+                st.write(f"**Workspace:** `{st.session_state['active_workspace']}` | **Version:** `{st.session_state.get('active_model_version') or 'latest'}`")
+            else:
+                st.markdown("#### No Active Workspace / Model Yet")
+                st.write("No model has been trained or queried in this session yet. Train a model in **03 Model Lab** or query **07 Models & Workspaces**.")
 
     with col_ctx2:
-        if st.session_state.get("last_validation_result"):
-            render_html(
-                """
-                <div class="helio-card" style="min-height:140px;">
-                    <div class="helio-eyebrow">DATA QUALITY CACHE</div>
-                    <h4 style="margin:0.2rem 0 0.5rem 0;">Latest Dataset Validation Available</h4>
-                    <p class="helio-muted" style="margin:0;">
-                        A dataset validation response was received from <code>POST /datasets/validate</code> during this session.
-                    </p>
-                </div>
-                """
-            )
-            with st.expander("Inspect Latest Validation Summary"):
-                st.json(st.session_state["last_validation_result"])
-        else:
-            render_html(
-                """
-                <div class="helio-card" style="min-height:140px;">
-                    <div class="helio-eyebrow">DATA QUALITY CACHE</div>
-                    <h4 style="margin:0.2rem 0 0.5rem 0;">No Dataset Validated Yet</h4>
-                    <p class="helio-muted" style="margin:0;">
-                        You have not uploaded and validated a CSV file yet. The API processes uploads temporarily per request—start in <strong>02 Dataset Management</strong> to verify your file.
-                    </p>
-                </div>
-                """
-            )
+        with st.container(border=True, height=165):
+            st.caption("DATA QUALITY CACHE")
+            if st.session_state.get("last_validation_result"):
+                st.markdown("#### Latest Dataset Validation Available")
+                st.write("A validation response was received from `/datasets/validate` during this session.")
+            else:
+                st.markdown("#### No Dataset Validated Yet")
+                st.write("Uploads are processed temporarily per request. Start in **02 Dataset Management** to validate your CSV.")
 
 
 # ---------------------------------------------------------------------
 # PAGE 02: DATASET MANAGEMENT
 # ---------------------------------------------------------------------
 def page_dataset_management() -> None:
-    render_html('<div class="helio-eyebrow">DATA INGESTION & QUALITY</div>')
-    st.markdown("## 02 Dataset Management")
-    render_html(
-        """
-        <div class="helio-guardrail">
-            <strong>Scientific & Workflow Note:</strong> CSV uploads use <code>multipart/form-data</code> and are processed temporarily per request. For the Trieste dataset (<code>trieste_q2</code>), the power target is <strong>derived DC power</strong>, not measured AC grid output.
-        </div>
-        """
+    st.caption("DATA INGESTION & QUALITY")
+    st.markdown("## Dataset Management")
+    st.info(
+        "**Scientific & Workflow Note:** CSV uploads use `multipart/form-data` and are processed temporarily per request. "
+        "For the Trieste dataset (`trieste_q2`), the power target is **derived DC power**, not measured AC grid output."
     )
 
-    uploaded_file = st.file_uploader(
-        "Upload Solar PV Dataset CSV (`file`)",
-        type=["csv"],
-        help="Supported format: Comma-separated values (.csv) compatible with `trieste_q2` or `generic` schemas.",
-        key="validate_csv_uploader",
-    )
+    with st.container(border=True):
+        uploaded_file = st.file_uploader(
+            "Upload Solar PV Dataset (CSV)",
+            type=["csv"],
+            help="Supported format: Comma-separated values (.csv) compatible with trieste_q2 or generic schemas.",
+            key="validate_csv_uploader",
+        )
 
-    dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("validate")
+        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("validate")
 
-    if uploaded_file is not None:
-        with st.expander("Raw CSV Source Preview (Unmodified Text View — First 10 Rows)", expanded=False):
-            st.caption("Displayed strictly as raw strings (`dtype=str`) without type coercion, rounding, or mutation.")
-            try:
-                uploaded_file.seek(0)
-                preview_df = pd.read_csv(uploaded_file, nrows=10, dtype=str, keep_default_na=False)
-                st.dataframe(preview_df, use_container_width=True)
-            except Exception as exc:
-                st.warning(f"Could not render local text preview: {exc}")
+        if uploaded_file is not None:
+            with st.expander("Raw CSV Source Preview (Unmodified Text View — First 10 Rows)", expanded=False):
+                st.caption("Displayed strictly as raw strings without type coercion, rounding, or mutation.")
+                try:
+                    uploaded_file.seek(0)
+                    preview_df = pd.read_csv(uploaded_file, nrows=10, dtype=str, keep_default_na=False)
+                    st.dataframe(preview_df, use_container_width=True)
+                except Exception as exc:
+                    st.warning(f"Could not render local text preview: {exc}")
 
-    validate_clicked = st.button(
-        "Validate Dataset (`POST /datasets/validate`)",
-        disabled=(uploaded_file is None),
-        use_container_width=True,
-    )
+        validate_clicked = st.button(
+            "Validate Dataset",
+            disabled=(uploaded_file is None),
+            use_container_width=True,
+        )
 
     if validate_clicked and uploaded_file is not None:
-        if not validate_json_string(col_map, "column_map") or not validate_json_string(power_opts, "power_options"):
+        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
             return
 
         form_data = {
@@ -960,18 +585,22 @@ def page_dataset_management() -> None:
             "column_map": col_map,
             "power_options": power_opts,
         }
-        with st.spinner("Validating dataset schema and quality via `POST /datasets/validate`..."):
+
+        with st.status("Sending CSV to API for validation...", expanded=True) as status_box:
+            st.write(f"Uploading **{uploaded_file.name}** ({uploaded_file.size / 1024:.1f} KB) with profile **{dataset_type}**...")
             ok, status_code, payload = api_call(
                 "POST",
                 "/datasets/validate",
                 data=form_data,
                 files=build_multipart_file(uploaded_file),
             )
-
-        if ok and isinstance(payload, dict):
-            st.session_state["last_validation_result"] = payload
-        else:
-            render_api_error(status_code, payload, context="POST /datasets/validate")
+            if ok and isinstance(payload, dict):
+                st.session_state["last_validation_result"] = payload
+                status_box.update(label=f"Validation response received (HTTP {status_code})", state="complete", expanded=False)
+            else:
+                st.session_state["last_validation_result"] = None
+                status_box.update(label=f"Validation failed (HTTP {status_code or 'Network Error'})", state="error", expanded=True)
+                render_api_error(status_code, payload, context="POST /datasets/validate")
 
     result = st.session_state.get("last_validation_result")
     if isinstance(result, dict):
@@ -980,12 +609,12 @@ def page_dataset_management() -> None:
 
         is_valid = result.get("valid", result.get("is_valid", result.get("status") == "ok"))
         status_label = "VALID" if is_valid is True else ("INVALID" if is_valid is False else str(result.get("status", "COMPLETED")))
-        render_html(f'<div style="margin-bottom:1rem;">Validation Status: {format_status_badge(status_label)}</div>')
+        render_status_pill(status_label)
 
         metric_candidates = [
             ("Row Count", result.get("row_count", result.get("n_rows", result.get("rows")))),
             ("Column Count", result.get("column_count", result.get("n_columns"))),
-            ("Dataset Profile", result.get("dataset", result.get("dataset_type"))),
+            ("Dataset Profile", result.get("dataset", result.get("dataset_type", dataset_type))),
             ("Target Column", result.get("target_column", result.get("target"))),
         ]
         present_metrics = [(label, val) for label, val in metric_candidates if isinstance(val, (int, float, str))]
@@ -998,30 +627,20 @@ def page_dataset_management() -> None:
         warnings = result.get("warnings", result.get("validation_warnings", []))
 
         if errors:
-            err_items = "".join(f"<li>{e}</li>" for e in (errors if isinstance(errors, list) else [errors]))
-            render_html(
-                f"""
-                <div class="helio-card" style="border-left:4px solid {PALETTE['RED']};">
-                    <h4>■ Validation Errors ({len(errors)})</h4>
-                    <ul>{err_items}</ul>
-                </div>
-                """
-            )
-        if warnings:
-            warn_items = "".join(f"<li>{w}</li>" for w in (warnings if isinstance(warnings, list) else [warnings]))
-            render_html(
-                f"""
-                <div class="helio-card" style="border-left:4px solid {PALETTE['AMBER']};">
-                    <h4>▲ Validation Warnings ({len(warnings)})</h4>
-                    <ul>{warn_items}</ul>
-                </div>
-                """
-            )
+            with st.container(border=True):
+                st.error(f"■ **Validation Errors ({len(errors) if isinstance(errors, list) else 1})**")
+                for err in (errors if isinstance(errors, list) else [errors]):
+                    st.markdown(f"- {sanitize_api_message(err)}")
 
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            schema_info = result.get("schema", result.get("columns", result.get("column_details")))
-            if schema_info is not None:
+        if warnings:
+            with st.container(border=True):
+                st.warning(f"▲ **Validation Warnings ({len(warnings) if isinstance(warnings, list) else 1})**")
+                for warn in (warnings if isinstance(warnings, list) else [warnings]):
+                    st.markdown(f"- {sanitize_api_message(warn)}")
+
+        schema_info = result.get("schema", result.get("columns", result.get("column_details")))
+        if schema_info is not None:
+            with st.container(border=True):
                 st.markdown("#### Returned Schema / Columns")
                 if isinstance(schema_info, list):
                     if len(schema_info) > 0 and isinstance(schema_info[0], dict):
@@ -1031,99 +650,110 @@ def page_dataset_management() -> None:
                 elif isinstance(schema_info, dict):
                     st.json(schema_info)
 
-        with col_s2:
-            quality_info = result.get("quality", result.get("data_quality", result.get("summary", result.get("cleaning_summary"))))
-            if quality_info is not None:
+        quality_info = result.get("quality", result.get("data_quality", result.get("summary", result.get("cleaning_summary"))))
+        if quality_info is not None:
+            with st.container(border=True):
                 st.markdown("#### Data Quality Summary")
+                
                 if isinstance(quality_info, dict):
+                    q_rows = quality_info.get("rows", "an unspecified number of")
+                    q_start = quality_info.get("start", "an unknown start date")
+                    q_end = quality_info.get("end", "an unknown end date")
+                    q_target = quality_info.get("observed_power_column")
+                    
+                    summary_md = f"This dataset spans from **{q_start}** to **{q_end}** with a total of **{q_rows}** recorded intervals."
+                    if q_target:
+                         summary_md += f" The system successfully detected `{q_target}` as the primary power target."
+                    else:
+                         summary_md += " ⚠️ **No power target was automatically detected.** You must explicitly provide a Target Column Override when training."
+                         
+                    dupes = quality_info.get("duplicate_timestamps")
+                    if dupes:
+                        summary_md += f" Note: Found **{dupes}** duplicate timestamps."
+                        
+                    st.markdown(summary_md)
+                    st.caption("Raw Quality Dictionary Metrics:")
                     st.json(quality_info)
                 elif isinstance(quality_info, list):
                     st.dataframe(pd.DataFrame(quality_info), use_container_width=True)
 
-        with st.expander("Full API Response JSON (`/datasets/validate`)", expanded=False):
+        with st.expander("Full API Response JSON (/datasets/validate)", expanded=False):
             st.json(result)
 
-        render_html(
-            f"""
-            <div class="helio-card" style="border-left:4px solid {PALETTE['ELECTRIC_CYAN']};">
-                <h4>What to Do Next</h4>
-                <ol style="margin-bottom:0.25rem;">
-                    <li>If validation errors were flagged above, resolve the missing columns, timestamps, or configuration JSON and re-validate.</li>
-                    <li>Once valid, proceed to <strong>03 Model Lab</strong> to train Linear Regression and Random Forest models, or go to <strong>04 Performance Analysis</strong> if you already have a saved workspace model.</li>
-                </ol>
-            </div>
-            """
-        )
-        n1, n2 = st.columns(2)
-        with n1:
-            if st.button("Proceed to 03 Model Lab →", use_container_width=True):
-                navigate_to("03 Model Lab")
-        with n2:
-            if st.button("Proceed to 04 Performance Analysis →", use_container_width=True):
-                navigate_to("04 Performance Analysis")
+        with st.container(border=True):
+            st.markdown("#### What to Do Next")
+            st.markdown(
+                "1. If validation errors were flagged above, fix the missing columns, dataset profile (`trieste_q2` vs `generic`), or configuration JSON and re-validate.\n"
+                "2. Once valid, proceed to **03 Model Lab** to train Linear Regression and Random Forest models, or go to **04 Performance Analysis** if you already have a saved workspace model."
+            )
+            n1, n2 = st.columns(2)
+            with n1:
+                if st.button("Proceed to 03 Model Lab →", use_container_width=True):
+                    navigate_to("03 Model Lab")
+            with n2:
+                if st.button("Proceed to 04 Performance Analysis →", use_container_width=True):
+                    navigate_to("04 Performance Analysis")
 
 
 # ---------------------------------------------------------------------
 # PAGE 03: MODEL LAB
 # ---------------------------------------------------------------------
 def page_model_lab() -> None:
-    render_html('<div class="helio-eyebrow">MACHINE LEARNING & EVALUATION</div>')
-    st.markdown("## 03 Model Lab")
-    render_html(
-        """
-        <div class="helio-guardrail">
-            <strong>Model Evaluation Guardrail:</strong> Each training request trains and evaluates Linear Regression and Random Forest models on a chronological hold-out split (latest observations held out for evaluation) and saves a new model version in the specified workspace.
-        </div>
-        """
+    st.caption("MACHINE LEARNING & EVALUATION")
+    st.markdown("## Model Lab")
+    st.info(
+        "**Model Evaluation Guardrail:** Each training request trains and evaluates Linear Regression and Random Forest models "
+        "on a chronological hold-out split (latest observations held out for evaluation) and saves a new model version in the workspace."
     )
 
-    uploaded_file = st.file_uploader(
-        "Upload Training CSV (`file`)",
-        type=["csv"],
-        key="train_csv_uploader",
-        help="CSV file containing environmental features and target power observations.",
-    )
-
-    col_w1, col_w2 = st.columns(2)
-    with col_w1:
-        default_ws = st.session_state.get("active_workspace") or "trieste_demo"
-        workspace = st.text_input(
-            "Workspace Name (`workspace` — required)",
-            value=default_ws,
-            max_chars=64,
-            help="Letters, numbers, underscore (_), or hyphen (-); maximum 64 characters.",
-        ).strip()
-    with col_w2:
-        test_fraction = st.number_input(
-            "Chronological Hold-out Test Fraction (`test_fraction`)",
-            min_value=0.05,
-            max_value=0.50,
-            value=0.20,
-            step=0.05,
-            help="Default 0.2. The latest chronological portion of the dataset is held out for evaluation.",
+    with st.container(border=True):
+        uploaded_file = st.file_uploader(
+            "Upload Training CSV",
+            type=["csv"],
+            key="train_csv_uploader",
+            help="CSV file containing environmental features and target power observations.",
         )
 
-    dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("train")
+        col_w1, col_w2 = st.columns(2)
+        with col_w1:
+            default_ws = st.session_state.get("active_workspace") or "trieste_demo"
+            workspace = st.text_input(
+                "Workspace Name (Required)",
+                value=default_ws,
+                max_chars=64,
+                help="Letters, numbers, underscore (_), or hyphen (-); maximum 64 characters.",
+            ).strip()
+        with col_w2:
+            test_fraction = st.number_input(
+                "Chronological Hold-out Test Fraction",
+                min_value=0.05,
+                max_value=0.50,
+                value=0.20,
+                step=0.05,
+                help="Default 0.2. The latest chronological portion of the dataset is held out for evaluation.",
+            )
 
-    with st.expander("Optional Target & Feature Overrides (`target` / `features`)", expanded=False):
-        st.caption("Only populate these fields if you know the backend's exact expected column names.")
-        t1, t2 = st.columns(2)
-        with t1:
-            target_col = st.text_input("Target Column Override (`target`)", value="").strip()
-        with t2:
-            features_raw = st.text_input("Features Override (`features` — comma-separated or JSON list)", value="").strip()
+        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("train")
 
-    train_clicked = st.button(
-        "Train Models (`POST /models/train`)",
-        disabled=(uploaded_file is None or not workspace),
-        use_container_width=True,
-    )
+        with st.expander("Optional Target & Feature Overrides", expanded=False):
+            st.caption("Only populate these fields if you know the backend's exact expected column names.")
+            t1, t2 = st.columns(2)
+            with t1:
+                target_col = st.text_input("Target Column Override", value="").strip()
+            with t2:
+                features_raw = st.text_input("Features Override (comma-separated or JSON list)", value="").strip()
+
+        train_clicked = st.button(
+            "Train Models",
+            disabled=(uploaded_file is None or not workspace),
+            use_container_width=True,
+        )
 
     if train_clicked and uploaded_file is not None:
         if not WORKSPACE_REGEX.match(workspace):
             st.error("Workspace must contain only letters, numbers, underscores, or hyphens (1–64 characters).")
             return
-        if not validate_json_string(col_map, "column_map") or not validate_json_string(power_opts, "power_options"):
+        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
             return
 
         form_data = {
@@ -1136,7 +766,8 @@ def page_model_lab() -> None:
             "column_map": col_map,
             "power_options": power_opts,
         }
-        with st.spinner("Training Linear Regression and Random Forest models via `POST /models/train`..."):
+        with st.status("Training models via API...", expanded=True) as status_box:
+            st.write(f"Uploading **{uploaded_file.name}** and training Random Forest & Linear Regression models...")
             ok, status_code, payload = api_call(
                 "POST",
                 "/models/train",
@@ -1160,7 +791,7 @@ def page_model_lab() -> None:
     if isinstance(train_res, dict):
         st.markdown("---")
         st.markdown("### Training & Evaluation Results")
-        render_html(f'<div style="margin-bottom:1rem;">Training Status: {format_status_badge("SUCCESS")}</div>')
+        render_status_pill("SUCCESS")
 
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Workspace", str(train_res.get("workspace", st.session_state.get("active_workspace", "—"))))
@@ -1203,9 +834,7 @@ def page_model_lab() -> None:
 
         if holdout_fields:
             st.markdown("#### Held-out Evaluation Split Details")
-            render_html(
-                '<div class="helio-muted" style="margin-bottom:0.5rem;">Observations held out chronologically for model evaluation (as reported by the API):</div>'
-            )
+            st.caption("Observations held out chronologically for model evaluation (as reported by the API):")
             st.dataframe(pd.DataFrame([holdout_fields]), use_container_width=True)
 
         model_rows = []
@@ -1272,7 +901,7 @@ def page_model_lab() -> None:
                 )
                 st.plotly_chart(fig, theme="streamlit", use_container_width=True)
 
-        with st.expander("Full API Response JSON (`/models/train`)", expanded=False):
+        with st.expander("Full API Response JSON (/models/train)", expanded=False):
             st.json(train_res)
 
 
@@ -1280,67 +909,62 @@ def page_model_lab() -> None:
 # PAGE 04: PERFORMANCE ANALYSIS
 # ---------------------------------------------------------------------
 def page_performance_analysis() -> None:
-    render_html('<div class="helio-eyebrow">HISTORICAL TELEMETRY & RESIDUALS</div>')
-    st.markdown("## 04 Performance Analysis")
-    render_html(
-        """
-        <div class="helio-guardrail">
-            <strong>Scientific Guardrails:</strong>
-            <ul style="margin-bottom:0;">
-                <li><strong>Derived DC Power ≠ Measured AC Power:</strong> For the Trieste dataset, calculated DC targets represent derived DC power, not verified grid-delivered AC production.</li>
-                <li><strong>Predictions are Estimates:</strong> Expected power is model output under observed environmental conditions, not ground truth.</li>
-            </ul>
-        </div>
-        """
+    st.caption("HISTORICAL TELEMETRY & RESIDUALS")
+    st.markdown("## Performance Analysis")
+    st.info(
+        "**Scientific Guardrails:**\n"
+        "- **Derived DC Power ≠ Measured AC Power:** For the Trieste dataset, calculated DC targets represent derived DC power, not verified grid-delivered AC production.\n"
+        "- **Predictions are Estimates:** Expected power is model output under observed environmental conditions, not ground truth."
     )
 
-    uploaded_file = st.file_uploader(
-        "Upload Analysis CSV (`file` — required per request)",
-        type=["csv"],
-        key="perf_csv_uploader",
-    )
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        workspace = st.text_input(
-            "Workspace (`workspace`)",
-            value=st.session_state.get("active_workspace") or "trieste_demo",
-            key="perf_ws",
-        ).strip()
-    with c2:
-        version = st.text_input(
-            "Model Version (`version`)",
-            value=st.session_state.get("active_model_version") or "latest",
-            key="perf_ver",
-        ).strip()
-    with c3:
-        group_by = st.selectbox(
-            "Summary Aggregation (`group_by`)",
-            options=["", "day", "month"],
-            format_func=lambda x: "None (Overall only)" if x == "" else f"Group by {x.capitalize()}",
-            key="perf_groupby",
+    with st.container(border=True):
+        uploaded_file = st.file_uploader(
+            "Upload Analysis CSV (Required per request)",
+            type=["csv"],
+            key="perf_csv_uploader",
         )
 
-    d1, d2, d3, d4 = st.columns(4)
-    with d1:
-        start_window = st.text_input("Start Date/Time (`start` optional)", placeholder="YYYY-MM-DD", key="perf_start").strip()
-    with d2:
-        end_window = st.text_input("End Date/Time (`end` optional)", placeholder="YYYY-MM-DD", key="perf_end").strip()
-    with d3:
-        include_rows = st.checkbox("Include Per-Row Predictions (`include_rows`)", value=True, key="perf_inc_rows")
-    with d4:
-        max_rows = st.number_input("Max Returned Rows (`max_rows`)", min_value=10, max_value=50000, value=2000, step=100, key="perf_max_rows")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            workspace = st.text_input(
+                "Workspace",
+                value=st.session_state.get("active_workspace") or "trieste_demo",
+                key="perf_ws",
+            ).strip()
+        with c2:
+            version = st.text_input(
+                "Model Version",
+                value=st.session_state.get("active_model_version") or "latest",
+                key="perf_ver",
+            ).strip()
+        with c3:
+            group_by = st.selectbox(
+                "Summary Aggregation",
+                options=["", "day", "month"],
+                format_func=lambda x: "None (Overall only)" if x == "" else f"Group by {x.capitalize()}",
+                key="perf_groupby",
+            )
 
-    dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("perf")
+        d1, d2, d3, d4 = st.columns(4)
+        with d1:
+            start_window = st.text_input("Start Date/Time (Optional)", placeholder="YYYY-MM-DD", key="perf_start").strip()
+        with d2:
+            end_window = st.text_input("End Date/Time (Optional)", placeholder="YYYY-MM-DD", key="perf_end").strip()
+        with d3:
+            include_rows = st.checkbox("Include Per-Row Predictions", value=True, key="perf_inc_rows")
+        with d4:
+            max_rows = st.number_input("Max Returned Rows", min_value=10, max_value=50000, value=2000, step=100, key="perf_max_rows")
 
-    run_perf = st.button(
-        "Run Historical Predictions & Performance Summary (`POST /predictions/historical` + `POST /performance/summary`)",
-        disabled=(uploaded_file is None or not workspace),
-        use_container_width=True,
-    )
+        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("perf")
+
+        run_perf = st.button(
+            "Run Historical Predictions & Performance Summary",
+            disabled=(uploaded_file is None or not workspace),
+            use_container_width=True,
+        )
 
     if run_perf and uploaded_file is not None:
-        if not validate_json_string(col_map, "column_map") or not validate_json_string(power_opts, "power_options"):
+        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
             return
 
         common_form = {
@@ -1350,13 +974,14 @@ def page_performance_analysis() -> None:
             "utc_offset_hours": utc_offset,
             "start": start_window or None,
             "end": end_window or None,
-            "include_rows": str(include_rows).lower(),
+            "include_rows": include_rows,
             "max_rows": int(max_rows),
             "column_map": col_map,
             "power_options": power_opts,
         }
 
-        with st.spinner("Generating historical predictions (`/predictions/historical`) and summary (`/performance/summary`)..."):
+        with st.status("Generating historical predictions and performance summary...", expanded=True):
+            st.write("Calling `/predictions/historical`...")
             ok_hist, code_hist, payload_hist = api_call(
                 "POST",
                 "/predictions/historical",
@@ -1364,6 +989,7 @@ def page_performance_analysis() -> None:
                 files=build_multipart_file(uploaded_file),
                 timeout=180,
             )
+            st.write("Calling `/performance/summary`...")
             summary_form = dict(common_form)
             if group_by:
                 summary_form["group_by"] = group_by
@@ -1392,7 +1018,7 @@ def page_performance_analysis() -> None:
 
     if isinstance(sum_res, dict):
         st.markdown("---")
-        st.markdown("### Aggregate Performance Summary (`POST /performance/summary`)")
+        st.markdown("### Aggregate Performance Summary")
         metrics_block = sum_res.get("summary", sum_res.get("metrics", sum_res))
         if isinstance(metrics_block, dict):
             scalar_items = [(k, v) for k, v in metrics_block.items() if isinstance(v, (int, float, str)) and not isinstance(v, bool)]
@@ -1404,15 +1030,15 @@ def page_performance_analysis() -> None:
 
         grouped_rows, grp_key = extract_rows_from_payload(sum_res)
         if grouped_rows:
-            st.markdown(f"#### Grouped Performance Breakdown (`{grp_key}`)")
+            st.markdown(f"#### Grouped Performance Breakdown ({grp_key})")
             st.dataframe(pd.DataFrame(grouped_rows), use_container_width=True)
 
-        with st.expander("Full `/performance/summary` JSON Response", expanded=False):
+        with st.expander("Full /performance/summary JSON Response", expanded=False):
             st.json(sum_res)
 
     if isinstance(hist_res, dict):
         st.markdown("---")
-        st.markdown("### Expected vs. Observed / Derived Target Power (`POST /predictions/historical`)")
+        st.markdown("### Expected vs. Observed / Derived Target Power")
 
         unit_label = hist_res.get("units", hist_res.get("power_unit", hist_res.get("unit", "W / kW (as defined by dataset)")))
         target_def = (
@@ -1442,15 +1068,7 @@ def page_performance_analysis() -> None:
             )
 
             time_range_str = f"{df[time_col].iloc[0]} to {df[time_col].iloc[-1]}" if len(df) > 0 else "N/A"
-            render_html(
-                f"""
-                <div class="helio-muted" style="margin-bottom:0.6rem;">
-                    <strong>Target Definition:</strong> {target_def} &nbsp;|&nbsp;
-                    <strong>Units:</strong> {unit_label} &nbsp;|&nbsp;
-                    <strong>Displayed Time Range:</strong> {time_range_str} ({len(df)} observations)
-                </div>
-                """
-            )
+            st.caption(f"**Target Definition:** {target_def} | **Units:** {unit_label} | **Displayed Time Range:** {time_range_str} ({len(df)} observations)")
 
             if exp_col or obs_col:
                 fig_ts = go.Figure()
@@ -1506,9 +1124,9 @@ def page_performance_analysis() -> None:
             with st.expander("Inspect Returned Historical Prediction Rows", expanded=False):
                 st.dataframe(df, use_container_width=True)
         else:
-            st.info("No per-row series returned in this response. Ensure `include_rows` is enabled to plot time-series points.")
+            st.info("No per-row series returned in this response. Ensure 'Include Per-Row Predictions' is enabled to plot time-series points.")
 
-        with st.expander("Full `/predictions/historical` JSON Response", expanded=False):
+        with st.expander("Full /predictions/historical JSON Response", expanded=False):
             st.json(hist_res)
 
 
@@ -1516,51 +1134,49 @@ def page_performance_analysis() -> None:
 # PAGE 05: ANOMALY DETECTION
 # ---------------------------------------------------------------------
 def page_anomaly_detection() -> None:
-    render_html('<div class="helio-eyebrow">DEVIATION DIAGNOSTICS</div>')
-    st.markdown("## 05 Anomaly Detection")
-    render_html(
-        f"""
-        <div class="helio-guardrail" style="border-left-color:{PALETTE['AMBER']};">
-            <strong>Investigation Guardrail:</strong> Flagged periods indicate <strong>potential underperformance requiring investigation</strong>, not confirmed inverter, panel, or equipment faults. Thresholds are prototype defaults and have not been calibrated against labelled real faults.
-        </div>
-        """
+    st.caption("DEVIATION DIAGNOSTICS")
+    st.markdown("## Anomaly Detection")
+    st.warning(
+        "**Investigation Guardrail:** Flagged periods indicate **potential underperformance requiring investigation**, "
+        "not confirmed inverter, panel, or equipment faults. Thresholds are prototype defaults and have not been calibrated against labelled real faults."
     )
 
-    uploaded_file = st.file_uploader(
-        "Upload CSV for Anomaly Analysis (`file`)",
-        type=["csv"],
-        key="anom_csv_uploader",
-    )
+    with st.container(border=True):
+        uploaded_file = st.file_uploader(
+            "Upload CSV for Anomaly Analysis",
+            type=["csv"],
+            key="anom_csv_uploader",
+        )
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        workspace = st.text_input(
-            "Workspace (`workspace`)",
-            value=st.session_state.get("active_workspace") or "trieste_demo",
-            key="anom_ws",
-        ).strip()
-    with c2:
-        version = st.text_input(
-            "Model Version (`version`)",
-            value=st.session_state.get("active_model_version") or "latest",
-            key="anom_ver",
-        ).strip()
-    with c3:
-        start_win = st.text_input("Start Window (`start` optional)", placeholder="YYYY-MM-DD", key="anom_start").strip()
-    with c4:
-        end_win = st.text_input("End Window (`end` optional)", placeholder="YYYY-MM-DD", key="anom_end").strip()
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            workspace = st.text_input(
+                "Workspace",
+                value=st.session_state.get("active_workspace") or "trieste_demo",
+                key="anom_ws",
+            ).strip()
+        with c2:
+            version = st.text_input(
+                "Model Version",
+                value=st.session_state.get("active_model_version") or "latest",
+                key="anom_ver",
+            ).strip()
+        with c3:
+            start_win = st.text_input("Start Window (Optional)", placeholder="YYYY-MM-DD", key="anom_start").strip()
+        with c4:
+            end_win = st.text_input("End Window (Optional)", placeholder="YYYY-MM-DD", key="anom_end").strip()
 
-    include_rows = st.checkbox("Include Row-Level Anomaly Details (`include_rows`)", value=True, key="anom_inc_rows")
-    dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("anom")
+        include_rows = st.checkbox("Include Row-Level Anomaly Details", value=True, key="anom_inc_rows")
+        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("anom")
 
-    run_anom = st.button(
-        "Analyse Potential Anomalies (`POST /anomalies/analyze`)",
-        disabled=(uploaded_file is None or not workspace),
-        use_container_width=True,
-    )
+        run_anom = st.button(
+            "Analyse Potential Anomalies",
+            disabled=(uploaded_file is None or not workspace),
+            use_container_width=True,
+        )
 
     if run_anom and uploaded_file is not None:
-        if not validate_json_string(col_map, "column_map") or not validate_json_string(power_opts, "power_options"):
+        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
             return
 
         form_data = {
@@ -1570,11 +1186,11 @@ def page_anomaly_detection() -> None:
             "utc_offset_hours": utc_offset,
             "start": start_win or None,
             "end": end_win or None,
-            "include_rows": str(include_rows).lower(),
+            "include_rows": include_rows,
             "column_map": col_map,
             "power_options": power_opts,
         }
-        with st.spinner("Analysing persistent deviations via `POST /anomalies/analyze`..."):
+        with st.spinner("Analysing persistent deviations via POST /anomalies/analyze..."):
             ok, status_code, payload = api_call(
                 "POST",
                 "/anomalies/analyze",
@@ -1610,14 +1226,9 @@ def page_anomaly_detection() -> None:
         )
 
         if overall_status is not None:
-            render_html(f'<div style="margin-bottom:1rem;">API Reported Status: {format_status_badge(overall_status)}</div>')
+            render_status_pill(overall_status)
         elif isinstance(anom_count, int):
-            inferred_badge = (
-                '<span class="status-badge status-healthy">● 0 FLAGGED PERIODS (NORMAL)</span>'
-                if anom_count == 0
-                else f'<span class="status-badge status-investigate">■ {anom_count} FLAGGED FOR INVESTIGATION</span>'
-            )
-            render_html(f'<div style="margin-bottom:1rem;">Status: {inferred_badge}</div>')
+            render_status_pill("NORMAL (0 FLAGGED)" if anom_count == 0 else f"{anom_count} FLAGGED FOR INVESTIGATION")
 
         if isinstance(summary_obj, dict):
             scalars = [(k, v) for k, v in summary_obj.items() if isinstance(v, (int, float, str)) and not isinstance(v, bool)]
@@ -1636,7 +1247,7 @@ def page_anomaly_detection() -> None:
         ]:
             records = anom_res.get(key_candidate)
             if isinstance(records, list) and len(records) > 0 and isinstance(records[0], dict):
-                st.markdown(f"#### {title_label} (`{key_candidate}` — {len(records)} records)")
+                st.markdown(f"#### {title_label} ({len(records)} records)")
                 df_records = pd.DataFrame(records)
                 st.dataframe(df_records, use_container_width=True)
 
@@ -1663,18 +1274,15 @@ def page_anomaly_detection() -> None:
                     st.plotly_chart(fig_anom, theme="streamlit", use_container_width=True)
                 break
 
-        render_html(
-            f"""
-            <div class="helio-card" style="border-left:4px solid {PALETTE['AMBER']};">
-                <h4>Investigation Prompt</h4>
-                <p style="margin-bottom:0;">
-                    Review flagged timestamps against local irradiance sensor cleaning logs, shading conditions, curtailment schedules, or data logger dropouts before scheduling field maintenance. Do not treat statistical deviation flags alone as confirmed hardware failure.
-                </p>
-            </div>
-            """
-        )
+        with st.container(border=True):
+            st.markdown("#### Investigation Prompt")
+            st.write(
+                "Review flagged timestamps against local irradiance sensor cleaning logs, shading conditions, "
+                "curtailment schedules, or data logger dropouts before scheduling field maintenance. "
+                "Do not treat statistical deviation flags alone as confirmed hardware failure."
+            )
 
-        with st.expander("Full `/anomalies/analyze` JSON Response", expanded=False):
+        with st.expander("Full /anomalies/analyze JSON Response", expanded=False):
             st.json(anom_res)
 
 
@@ -1682,104 +1290,99 @@ def page_anomaly_detection() -> None:
 # PAGE 06: WHAT-IF SIMULATOR
 # ---------------------------------------------------------------------
 def page_whatif_simulator() -> None:
-    render_html('<div class="helio-eyebrow">HYPOTHETICAL SCENARIO MODELLING</div>')
-    st.markdown("## 06 What-if Simulator")
-    render_html(
-        f"""
-        <div class="helio-guardrail" style="border-left-color:{PALETTE['ELECTRIC_CYAN']};">
-            <strong>Simulation Guardrail:</strong> What-if outputs are <strong>hypothetical statistical model re-predictions</strong> under adjusted scenario inputs. They are not physical PV simulations or a guarantee of real-world energy production.
-        </div>
-        """
+    st.caption("HYPOTHETICAL SCENARIO MODELLING")
+    st.markdown("## What-if Simulator")
+    st.info(
+        "**Simulation Guardrail:** What-if outputs are **hypothetical statistical model re-predictions** under adjusted scenario inputs. "
+        "They are not physical PV simulations or a guarantee of real-world energy production."
     )
 
     reset_key = st.session_state["whatif_reset_counter"]
 
-    uploaded_file = st.file_uploader(
-        "Upload Baseline CSV for Simulation (`file`)",
-        type=["csv"],
-        key=f"whatif_csv_{reset_key}",
-    )
-
-    c1, c2 = st.columns(2)
-    with c1:
-        workspace = st.text_input(
-            "Workspace (`workspace`)",
-            value=st.session_state.get("active_workspace") or "trieste_demo",
-            key=f"whatif_ws_{reset_key}",
-        ).strip()
-    with c2:
-        version = st.text_input(
-            "Model Version (`version`)",
-            value=st.session_state.get("active_model_version") or "latest",
-            key=f"whatif_ver_{reset_key}",
-        ).strip()
-
-    st.markdown("#### Scenario Input Controls (`POST /simulations/what-if`)")
-    st.caption("Adjust environmental scenario parameters with explicit units and validated ranges.")
-
-    s1, s2, s3 = st.columns(3)
-    with s1:
-        irradiance_factor = st.number_input(
-            "Irradiance Multiplier (`irradiance_factor` / `scale`, ratio [×])",
-            min_value=0.0,
-            max_value=2.0,
-            value=1.10,
-            step=0.05,
-            key=f"whatif_irr_factor_{reset_key}",
-            help="E.g. 1.10 = +10% solar irradiance (W/m²). Validated range: 0.0× to 2.0×.",
-        )
-    with s2:
-        irradiance_delta = st.number_input(
-            "Irradiance Offset (`irradiance_delta`, W/m²)",
-            min_value=-1000.0,
-            max_value=1000.0,
-            value=0.0,
-            step=25.0,
-            key=f"whatif_irr_delta_{reset_key}",
-            help="Additive change to irradiance in W/m².",
-        )
-    with s3:
-        temp_delta = st.number_input(
-            "Temperature Offset (`temperature_delta`, °C)",
-            min_value=-30.0,
-            max_value=30.0,
-            value=0.0,
-            step=1.0,
-            key=f"whatif_temp_delta_{reset_key}",
-            help="Additive shift to ambient/module temperature in °C.",
+    with st.container(border=True):
+        uploaded_file = st.file_uploader(
+            "Upload Baseline CSV for Simulation",
+            type=["csv"],
+            key=f"whatif_csv_{reset_key}",
         )
 
-    with st.expander("Custom / Exact Scenario JSON or Form Fields Override", expanded=False):
-        st.caption(
-            "If your specific model features use custom scenario JSON (`scenario` / `adjustments`), enter it below to pass directly to `POST /simulations/what-if`."
-        )
-        custom_scenario_json = st.text_area(
-            "Scenario JSON (`scenario`)",
-            value="",
-            placeholder='{"irradiance_scale": 1.1, "temperature_delta_c": 2.0}',
-            key=f"whatif_custom_json_{reset_key}",
-        ).strip()
+        c1, c2 = st.columns(2)
+        with c1:
+            workspace = st.text_input(
+                "Workspace",
+                value=st.session_state.get("active_workspace") or "trieste_demo",
+                key=f"whatif_ws_{reset_key}",
+            ).strip()
+        with c2:
+            version = st.text_input(
+                "Model Version",
+                value=st.session_state.get("active_model_version") or "latest",
+                key=f"whatif_ver_{reset_key}",
+            ).strip()
 
-    dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options(f"whatif_{reset_key}")
+        st.markdown("#### Scenario Input Controls")
+        st.caption("Adjust environmental scenario parameters with explicit units and validated ranges.")
 
-    btn_col1, btn_col2 = st.columns([3, 1])
-    with btn_col1:
-        run_sim = st.button(
-            "Run Simulation (`POST /simulations/what-if`)",
-            disabled=(uploaded_file is None or not workspace),
-            use_container_width=True,
-        )
-    with btn_col2:
-        if st.button("Reset Scenario Controls", use_container_width=True):
-            st.session_state["whatif_reset_counter"] += 1
-            st.session_state["last_whatif_result"] = None
-            st.rerun()
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            irradiance_factor = st.number_input(
+                "Irradiance Multiplier (ratio [×])",
+                min_value=0.0,
+                max_value=2.0,
+                value=1.10,
+                step=0.05,
+                key=f"whatif_irr_factor_{reset_key}",
+                help="E.g. 1.10 = +10% solar irradiance (W/m²). Validated range: 0.0× to 2.0×.",
+            )
+        with s2:
+            irradiance_delta = st.number_input(
+                "Irradiance Offset (W/m²)",
+                min_value=-1000.0,
+                max_value=1000.0,
+                value=0.0,
+                step=25.0,
+                key=f"whatif_irr_delta_{reset_key}",
+                help="Additive change to irradiance in W/m².",
+            )
+        with s3:
+            temp_delta = st.number_input(
+                "Temperature Offset (°C)",
+                min_value=-30.0,
+                max_value=30.0,
+                value=0.0,
+                step=1.0,
+                key=f"whatif_temp_delta_{reset_key}",
+                help="Additive shift to ambient/module temperature in °C.",
+            )
+
+        with st.expander("Custom Scenario JSON Override (Optional)", expanded=False):
+            custom_scenario_json = st.text_area(
+                "Scenario JSON",
+                value="",
+                placeholder='{"irradiance_scale": 1.1, "temperature_delta_c": 2.0}',
+                key=f"whatif_custom_json_{reset_key}",
+            ).strip()
+
+        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options(f"whatif_{reset_key}")
+
+        btn_col1, btn_col2 = st.columns([3, 1])
+        with btn_col1:
+            run_sim = st.button(
+                "Run Simulation",
+                disabled=(uploaded_file is None or not workspace),
+                use_container_width=True,
+            )
+        with btn_col2:
+            if st.button("Reset Scenario Controls", use_container_width=True):
+                st.session_state["whatif_reset_counter"] += 1
+                st.session_state["last_whatif_result"] = None
+                st.rerun()
 
     if run_sim and uploaded_file is not None:
         if (
-            not validate_json_string(custom_scenario_json, "scenario")
-            or not validate_json_string(col_map, "column_map")
-            or not validate_json_string(power_opts, "power_options")
+            not validate_json_string(custom_scenario_json, "Scenario JSON")
+            or not validate_json_string(col_map, "Column Map JSON")
+            or not validate_json_string(power_opts, "Power Options JSON")
         ):
             return
 
@@ -1811,7 +1414,7 @@ def page_whatif_simulator() -> None:
             "power_options": power_opts,
         }
 
-        with st.spinner("Running hypothetical what-if simulation via `POST /simulations/what-if`..."):
+        with st.spinner("Running hypothetical what-if simulation via POST /simulations/what-if..."):
             ok, status_code, payload = api_call(
                 "POST",
                 "/simulations/what-if",
@@ -1829,7 +1432,7 @@ def page_whatif_simulator() -> None:
     if isinstance(sim_res, dict):
         st.markdown("---")
         st.markdown("### Hypothetical Simulation Output (Not a Real-World Production Guarantee)")
-        render_html('<div style="margin-bottom:1rem;"><span class="status-badge status-neutral">◆ HYPOTHETICAL SIMULATION RESULT</span></div>')
+        render_status_pill("HYPOTHETICAL SIMULATION")
 
         summary_block = sim_res.get("summary", sim_res.get("comparison", sim_res.get("metrics", sim_res)))
         if isinstance(summary_block, dict):
@@ -1880,7 +1483,7 @@ def page_whatif_simulator() -> None:
             with st.expander("Inspect Returned Simulation Rows", expanded=False):
                 st.dataframe(df_sim, use_container_width=True)
 
-        with st.expander("Full `/simulations/what-if` JSON Response", expanded=False):
+        with st.expander("Full /simulations/what-if JSON Response", expanded=False):
             st.json(sim_res)
 
 
@@ -1888,39 +1491,37 @@ def page_whatif_simulator() -> None:
 # PAGE 07: MODELS & WORKSPACES
 # ---------------------------------------------------------------------
 def page_models_workspaces() -> None:
-    render_html('<div class="helio-eyebrow">MODEL REGISTRY & VERSIONING</div>')
-    st.markdown("## 07 Models & Workspaces")
-    render_html(
-        """
-        <div class="helio-guardrail">
-            <strong>API Architecture Note:</strong> The HelioIQ API does not expose a global workspace-discovery endpoint. Enter a known workspace name below (or select one used earlier in this session) to query <code>GET /models/{workspace}</code> and <code>GET /models/{workspace}/{version}</code>.
-        </div>
-        """
+    st.caption("MODEL REGISTRY & VERSIONING")
+    st.markdown("## Models & Workspaces")
+    st.info(
+        "**API Architecture Note:** The HelioIQ API does not expose a global workspace-discovery endpoint. "
+        "Enter a known workspace name below (or select one used earlier in this session) to query model versions and details."
     )
 
     known_ws = st.session_state.get("known_workspaces", [])
-    col_w1, col_w2 = st.columns([2, 1])
-    with col_w1:
-        default_ws = st.session_state.get("active_workspace") or (known_ws[0] if known_ws else "trieste_demo")
-        workspace_input = st.text_input(
-            "Enter Known Workspace Name (`workspace`)",
-            value=default_ws,
-            max_chars=64,
-        ).strip()
-    with col_w2:
-        if known_ws:
-            selected_session_ws = st.selectbox(
-                "Or Pick Session Workspace",
-                options=["(use text input)"] + known_ws,
-            )
-            if selected_session_ws != "(use text input)":
-                workspace_input = selected_session_ws
+    with st.container(border=True):
+        col_w1, col_w2 = st.columns([2, 1])
+        with col_w1:
+            default_ws = st.session_state.get("active_workspace") or (known_ws[0] if known_ws else "trieste_demo")
+            workspace_input = st.text_input(
+                "Enter Known Workspace Name",
+                value=default_ws,
+                max_chars=64,
+            ).strip()
+        with col_w2:
+            if known_ws:
+                selected_session_ws = st.selectbox(
+                    "Or Pick Session Workspace",
+                    options=["(use text input)"] + known_ws,
+                )
+                if selected_session_ws != "(use text input)":
+                    workspace_input = selected_session_ws
 
-    fetch_versions = st.button(
-        f"List Versions in Workspace (`GET /models/{workspace_input or '{workspace}'}`)",
-        disabled=not workspace_input,
-        use_container_width=True,
-    )
+        fetch_versions = st.button(
+            f"List Versions in Workspace ({workspace_input or 'workspace'})",
+            disabled=not workspace_input,
+            use_container_width=True,
+        )
 
     if fetch_versions and workspace_input:
         ok, status_code, payload = api_call("GET", f"/models/{workspace_input}")
@@ -1955,25 +1556,25 @@ def page_models_workspaces() -> None:
         elif isinstance(ws_payload, list):
             st.dataframe(pd.DataFrame(ws_payload), use_container_width=True)
 
-        with st.expander("Raw `GET /models/{workspace}` Response", expanded=False):
+        with st.expander("Raw GET /models/{workspace} Response", expanded=False):
             st.json(ws_payload)
 
     st.markdown("---")
-    st.markdown("### Inspect Specific Model Version (`GET /models/{workspace}/{version}`)")
-    v_col1, v_col2 = st.columns([3, 1])
-    with v_col1:
-        version_to_query = st.text_input(
-            "Version Identifier (`version` — use `latest` for newest)",
-            value=version_options[-1] if len(version_options) > 1 else "latest",
-        ).strip()
-    with v_col2:
-        st.write("")
-        st.write("")
-        inspect_btn = st.button(
-            "Get Version Details",
-            disabled=not (workspace_input and version_to_query),
-            use_container_width=True,
-        )
+    st.markdown("### Inspect Specific Model Version")
+    with st.container(border=True):
+        v_col1, v_col2 = st.columns([3, 1])
+        with v_col1:
+            version_to_query = st.text_input(
+                "Version Identifier (use 'latest' for newest)",
+                value=version_options[-1] if len(version_options) > 1 else "latest",
+            ).strip()
+        with v_col2:
+            st.write("")
+            inspect_btn = st.button(
+                "Get Version Details",
+                disabled=not (workspace_input and version_to_query),
+                use_container_width=True,
+            )
 
     if inspect_btn and workspace_input and version_to_query:
         ok_v, code_v, payload_v = api_call("GET", f"/models/{workspace_input}/{version_to_query}")
@@ -2019,19 +1620,11 @@ def main() -> None:
     init_session_state()
 
     with st.sidebar:
-        render_html(
-            f"""
-            <div style="padding:0.25rem 0 1rem 0; border-bottom:1px solid {PALETTE['STEEL_BLUE']}; margin-bottom:1rem;">
-                <div style="font-size:1.55rem; font-weight:800; letter-spacing:0.04em;">
-                    HELIO<span style="color:{PALETTE['ELECTRIC_CYAN']};">IQ</span>
-                </div>
-                <div class="helio-muted" style="font-size:0.8rem; margin-top:0.2rem;">
-                    Solar PV Performance Intelligence
-                </div>
-            </div>
-            <div class="helio-eyebrow">MODULE NAVIGATION GRID</div>
-            """
+        st.markdown(
+            f'<div style="padding:0.2rem 0 0.8rem 0; border-bottom:1px solid {PALETTE["STEEL_BLUE"]}; margin-bottom:0.8rem;"><div style="font-size:1.5rem; font-weight:800; letter-spacing:0.04em;">HELIO<span style="color:{PALETTE["ELECTRIC_CYAN"]};">IQ</span></div><div style="color:{PALETTE["MUTED_GREY"]}; font-size:0.8rem;">Solar PV Performance Intelligence</div></div>',
+            unsafe_allow_html=True,
         )
+        st.caption("MODULE NAVIGATION GRID")
 
         selected_page = st.radio(
             "APPLICATION NAVIGATION",
@@ -2044,20 +1637,14 @@ def main() -> None:
             st.rerun()
 
         st.markdown("---")
-        render_html(
-            f"""
-            <div class="helio-card" style="padding:0.9rem 1rem; margin-bottom:0;">
-                <div class="helio-eyebrow">TELEMETRY LEGEND</div>
-                <div style="font-size:0.8rem; line-height:1.8; margin-top:0.35rem;">
-                    <span style="color:{PALETTE['GREEN']}; font-weight:700;">● Healthy / Normal</span><br/>
-                    <span style="color:{PALETTE['AMBER']}; font-weight:700;">▲ Watch / Caution</span><br/>
-                    <span style="color:{PALETTE['RED']}; font-weight:700;">■ Investigate Deviation</span>
-                </div>
-                <div class="helio-eyebrow" style="margin-top:0.85rem;">API GATEWAY</div>
-                <code style="font-size:0.78rem;">{API_BASE_URL}</code>
-            </div>
-            """
-        )
+        with st.container(border=True):
+            st.caption("STATUS LEGEND")
+            st.markdown(
+                f'<div style="font-size:0.8rem; line-height:1.8;"><span style="color:{PALETTE["GREEN"]}; font-weight:700;">● Healthy / Normal</span><br/><span style="color:{PALETTE["AMBER"]}; font-weight:700;">▲ Watch / Caution</span><br/><span style="color:{PALETTE["RED"]}; font-weight:700;">■ Investigate Deviation</span></div>',
+                unsafe_allow_html=True,
+            )
+            st.caption("API GATEWAY")
+            st.code(API_BASE_URL, language=None)
 
     # Persistent Top Bar
     render_top_bar()
