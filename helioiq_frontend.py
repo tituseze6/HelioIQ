@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import re
@@ -9,258 +10,294 @@ import requests
 import streamlit as st
 
 # =====================================================================
-# 1. CONFIGURATION & HELIOIQ COLOUR PALETTE CONSTANTS
+# 1. CONFIGURATION & COLOR PALETTE
 # =====================================================================
 API_BASE_URL = os.getenv("HELIOIQ_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
-# HelioIQ Colour Palette Guide constants
 PALETTE = {
-    "BLACK": "#000000",          
-    "MIDNIGHT_NAVY": "#000914",  
-    "WHITE": "#FFFFFF",          
-    "ELECTRIC_CYAN": "#1FC3FF",  
-    "STEEL_BLUE": "#16324F",     
-    "MUTED_GREY": "#8CA3B8",     
-    "ICE_BLUE": "#B8EDFF",       
-    "SOFT_WHITE": "#EAF2F8",     
-    "GREEN": "#35D07F",          
-    "AMBER": "#FFC857",          
-    "RED": "#FF5D6C",            
+    "MIDNIGHT_NAVY": "#08131F",          # Main background
+    "DEEP_BLUE": "#102033",              # Secondary surfaces
+    "WARM_IVORY": "#FFFAF0",             # Primary text
+    "SOLAR_AMBER": "#F7B941",            # Accent / Moderate warning (Yellow)
+    "TRANSLUCENT_DEEP_BLUE": "#12233494",# Component backgrounds (58% opacity)
+    "ELECTRIC_TEAL": "#42D6C5",          # Healthy status / Normal (Green)
+    "SIGNAL_BLUE": "#7AA7FF",            # Expected Baseline Power (Blue)
+    "ALERT_CORAL": "#FF7373",            # Actual Power / Severe (Red)
+    "SLATE_SILVER": "#A8B7C8",           # Secondary text / labels
+    "ELEVATED_SURFACE": "#25394C",       # Hover states / selected surfaces
 }
 
-# The sidebar keeps the numbers to maintain correct vertical ordering
 PAGES = [
-    "01 Home / Dashboard",
-    "02 Dataset Management",
-    "03 Model Lab",
-    "04 Performance Analysis",
-    "05 Anomaly Detection",
-    "06 What-if Simulator",
-    "07 Models & Workspaces",
+    "Home",
+    "Analysis Workspace",
+    "What-if Simulator",
 ]
 
 WORKSPACE_REGEX = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 # =====================================================================
-# 2. PAGE SETUP & THEME-AWARE CSS (USING NATIVE CONTAINERS)
+# 2. PAGE SETUP & THEME INJECTION
 # =====================================================================
 st.set_page_config(
-    page_title="HelioIQ | Solar PV Performance Intelligence",
+    page_title="HelioIQ | PV Performance Intelligence",
     page_icon="☀️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
+def render_html(html_content: str) -> None:
+    cleaned = "\n".join(line.lstrip() for line in html_content.splitlines() if line.strip())
+    st.markdown(cleaned, unsafe_allow_html=True)
+
+
 def inject_helioiq_css() -> None:
-    """
-    Styles native Streamlit bordered containers, metrics, sidebar tiles, and buttons
-    using the HelioIQ colour palette while supporting Light and Dark modes.
-    """
     css = """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+        --hq-bg: __MIDNIGHT_NAVY__;
+        --hq-surface: __DEEP_BLUE__;
+        --hq-surface-2: __TRANSLUCENT_DEEP_BLUE__;
+        --hq-text: __WARM_IVORY__;
+        --hq-muted: __SLATE_SILVER__;
+        --hq-border: __ELEVATED_SURFACE__;
+        --hq-accent: __SOLAR_AMBER__;
+        --hq-radius: 12px;
+    }
+
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+
+    html, body, .stApp, [data-testid="stAppViewContainer"] {
+        background: var(--hq-bg) !important;
+        color: var(--hq-text) !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+
+    #MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] { visibility: hidden; height: 0; }
+    [data-testid="stHeader"] { background: transparent !important; }
     
-    html, body, .stApp { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important; }
-    .block-container { padding-top: 1.4rem !important; padding-bottom: 3rem !important; max-width: 1420px !important; }
-    h1, h2, h3, h4, h5, h6 { font-family: 'Inter', sans-serif !important; font-weight: 700 !important; letter-spacing: -0.02em !important; }
+    .block-container { 
+        padding-top: 0.5rem !important; 
+        padding-bottom: 1.5rem !important; 
+        max-width: 1200px !important; 
+    }
+
+    h1, h2, h3, h4, h5, h6 { color: var(--hq-text) !important; font-weight: 700 !important; letter-spacing: -0.02em !important; }
+    p, li, label { color: var(--hq-text) !important; font-family: 'Inter', sans-serif !important; font-size: 0.95rem !important; }
+    small, .stCaption, [data-testid="stCaptionContainer"] p { color: var(--hq-muted) !important; }
+    a { color: var(--hq-accent) !important; text-decoration: none; }
+    hr { border-color: var(--hq-border) !important; margin: 1rem 0 !important; }
+
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: var(--hq-surface) !important;
+        border: 1px solid var(--hq-border) !important;
+        border-radius: var(--hq-radius) !important;
+        padding: 1rem !important;
+    }
     
-    /* Native Bordered Containers (Bento Grid Cards) */
-    [data-testid="stVerticalBlockBorderWrapper"] { background-color: color-mix(in srgb, var(--secondary-background-color) 90%, __MIDNIGHT_NAVY__ 10%) !important; border: 1px solid color-mix(in srgb, __STEEL_BLUE__ 75%, var(--text-color) 25%) !important; border-radius: 10px !important; padding: 0.35rem !important; transition: border-color 0.2s ease, box-shadow 0.2s ease !important; }
-    [data-testid="stVerticalBlockBorderWrapper"]:hover { border-color: __ELECTRIC_CYAN__ !important; box-shadow: 0 4px 18px rgba(31, 195, 255, 0.08) !important; }
+    [data-testid="stMetric"] {
+        background: var(--hq-surface) !important;
+        border: 1px solid var(--hq-border) !important;
+        border-radius: 10px !important;
+        padding: 0.75rem 1rem !important;
+    }
+    [data-testid="stMetricLabel"] p { color: var(--hq-muted) !important; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; }
+    [data-testid="stMetricValue"] { color: var(--hq-text) !important; font-weight: 800 !important; font-size: 1.3rem !important; }
+
+    [data-testid="stPills"] {
+        justify-content: center !important;
+        gap: 0.5rem !important;
+    }
+    [data-testid="stPills"] > button {
+        background: transparent !important;
+        border: none !important;
+        color: var(--hq-muted) !important;
+        font-weight: 500 !important;
+        font-size: 0.85rem !important;
+        padding: 0.3rem 1rem !important;
+        border-radius: 50px !important;
+    }
+    [data-testid="stPills"] > button:hover {
+        background: var(--hq-surface-2) !important;
+        color: var(--hq-text) !important;
+    }
+    [data-testid="stPills"] > button[aria-pressed="true"], 
+    [data-testid="stPills"] > button[data-checked="true"] {
+        background: var(--hq-accent) !important;
+        color: var(--hq-bg) !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"] {
+        background: var(--hq-surface-2) !important;
+        border: 1px dashed var(--hq-border) !important;
+        border-radius: 10px !important;
+        padding: 1rem !important;
+    }
+
+    .stButton > button, .stDownloadButton > button {
+        background: transparent !important;
+        color: var(--hq-text) !important;
+        border: 1px solid var(--hq-border) !important;
+        border-radius: 50px !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        padding: 0.4rem 1.2rem !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        transition: all 0.15s ease !important;
+    }
+    .stButton > button:hover { border-color: var(--hq-accent) !important; color: var(--hq-accent) !important; }
     
-    /* Metric Containers */
-    [data-testid="stMetric"] { background-color: color-mix(in srgb, var(--secondary-background-color) 90%, __MIDNIGHT_NAVY__ 10%) !important; border: 1px solid color-mix(in srgb, __STEEL_BLUE__ 75%, var(--text-color) 25%) !important; border-radius: 10px !important; padding: 0.9rem 1.1rem !important; }
-    [data-testid="stMetricLabel"] { color: __MUTED_GREY__ !important; font-size: 0.78rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; }
-    [data-testid="stMetricValue"] { font-weight: 800 !important; font-size: 1.45rem !important; }
+    .stButton > button[data-testid="baseButton-primary"],
+    .stButton > button[kind="primary"] { 
+        background: var(--hq-accent) !important; 
+        color: var(--hq-bg) !important; 
+        border-color: var(--hq-accent) !important; 
+    }
+    .stButton > button[data-testid="baseButton-primary"] *,
+    .stButton > button[kind="primary"] * { 
+        color: var(--hq-bg) !important; 
+        font-weight: 700 !important; 
+    }
+    .stButton > button[data-testid="baseButton-primary"]:hover,
+    .stButton > button[kind="primary"]:hover { 
+        filter: brightness(1.1); 
+        color: var(--hq-bg) !important; 
+    }
     
-    /* Sidebar Navigation Grid Tiles */
-    [data-testid="stSidebar"] { border-right: 1px solid color-mix(in srgb, __STEEL_BLUE__ 75%, var(--text-color) 25%) !important; }
-    [data-testid="stSidebar"] div[role="radiogroup"] { display: grid !important; grid-template-columns: 1fr !important; gap: 0.4rem !important; }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label { background-color: color-mix(in srgb, var(--secondary-background-color) 88%, __MIDNIGHT_NAVY__ 12%) !important; border: 1px solid color-mix(in srgb, __STEEL_BLUE__ 70%, var(--text-color) 30%) !important; border-radius: 8px !important; padding: 0.6rem 0.85rem !important; margin: 0 !important; cursor: pointer !important; transition: all 0.16s ease !important; width: 100% !important; }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label p { font-size: 0.88rem !important; font-weight: 600 !important; margin: 0 !important; color: var(--text-color) !important; }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover { border-color: __ICE_BLUE__ !important; background-color: rgba(31, 195, 255, 0.08) !important; }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) { border-color: __ELECTRIC_CYAN__ !important; border-left: 4px solid __ELECTRIC_CYAN__ !important; background-color: rgba(31, 195, 255, 0.14) !important; }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p { color: __ELECTRIC_CYAN__ !important; font-weight: 700 !important; }
-    
-    /* Primary Buttons */
-    .stButton > button, .stFormSubmitButton > button { background-color: __ELECTRIC_CYAN__ !important; color: __MIDNIGHT_NAVY__ !important; border: 1px solid __ELECTRIC_CYAN__ !important; font-weight: 700 !important; font-size: 0.88rem !important; border-radius: 8px !important; padding: 0.5rem 1.1rem !important; transition: all 0.16s ease !important; }
-    .stButton > button *, .stFormSubmitButton > button * { color: __MIDNIGHT_NAVY__ !important; font-weight: 700 !important; background: transparent !important; }
-    .stButton > button:hover, .stFormSubmitButton > button:hover { background-color: __ICE_BLUE__ !important; border-color: __ICE_BLUE__ !important; color: __BLACK__ !important; box-shadow: 0 4px 12px rgba(31, 195, 255, 0.25) !important; }
-    .stButton > button:disabled, .stFormSubmitButton > button:disabled { background-color: rgba(22, 50, 79, 0.35) !important; border-color: rgba(140, 163, 184, 0.3) !important; color: __MUTED_GREY__ !important; opacity: 0.6 !important; box-shadow: none !important; }
-    .stButton > button:disabled *, .stFormSubmitButton > button:disabled * { color: __MUTED_GREY__ !important; }
-    
-    /* Status Badges */
-    .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.7rem; border-radius: 999px; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.03em; }
-    .status-healthy { background-color: rgba(53, 208, 127, 0.15); color: __GREEN__ !important; border: 1px solid __GREEN__; }
-    .status-caution { background-color: rgba(255, 200, 87, 0.15); color: __AMBER__ !important; border: 1px solid __AMBER__; }
-    .status-investigate { background-color: rgba(255, 93, 108, 0.15); color: __RED__ !important; border: 1px solid __RED__; }
-    .status-neutral { background-color: rgba(31, 195, 255, 0.12); color: __ELECTRIC_CYAN__ !important; border: 1px solid __STEEL_BLUE__; }
+    .stButton > button:disabled { opacity: 0.35 !important; box-shadow: none !important; }
+
+    [data-baseweb="input"], [data-baseweb="select"] > div, [data-baseweb="textarea"] {
+        background: var(--hq-surface-2) !important;
+        border: 1px solid var(--hq-border) !important;
+        border-radius: 8px !important;
+        color: var(--hq-text) !important;
+    }
+    [data-baseweb="tab-list"] { gap: 1rem !important; border-bottom: 1px solid var(--hq-border) !important; background: transparent !important; }
+    [data-baseweb="tab"] { background: transparent !important; padding: 0.6rem 0 !important; font-size: 0.85rem !important; color: var(--hq-muted) !important; }
+    [data-baseweb="tab"][aria-selected="true"] { color: var(--hq-text) !important; font-weight: 600 !important; }
+    [data-baseweb="tab-highlight"] { background: var(--hq-accent) !important; height: 3px !important; border-radius: 3px 3px 0 0; }
+
+    .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; }
+    .status-healthy { background: rgba(66, 214, 197, 0.12); color: __ELECTRIC_TEAL__ !important; border: 1px solid __ELECTRIC_TEAL__; }
+    .status-caution { background: rgba(247, 185, 65, 0.12); color: __SOLAR_AMBER__ !important; border: 1px solid __SOLAR_AMBER__; }
+    .status-investigate { background: rgba(255, 115, 115, 0.12); color: __ALERT_CORAL__ !important; border: 1px solid __ALERT_CORAL__; }
+    .status-neutral { background: transparent; color: __SLATE_SILVER__ !important; border: 1px solid __ELEVATED_SURFACE__; }
     </style>
     """
-    
     for key, hex_code in PALETTE.items():
         css = css.replace(f"__{key}__", hex_code)
-        
     st.markdown(css, unsafe_allow_html=True)
 
 
 # =====================================================================
-# 3. SESSION STATE INITIALISATION
+# 3. SESSION STATE & HELPERS
 # =====================================================================
 def init_session_state() -> None:
     defaults = {
         "current_page": PAGES[0],
-        "health_data": None,
         "active_workspace": None,
         "active_model_version": None,
-        "known_workspaces": [],
+        "shared_file_bytes": None,
+        "shared_file_name": None,
+        "dataset_profile": "trieste_q2",
+        "utc_offset": 1.0,
         "last_validation_result": None,
         "last_training_result": None,
         "last_historical_result": None,
         "last_summary_result": None,
         "last_anomaly_result": None,
         "last_whatif_result": None,
-        "whatif_reset_counter": 0,
+        "sim_irr": 1.0,
+        "sim_temp": 0.0,
+        "sim_shade": 0.0,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
+    
+    if st.session_state["current_page"] not in PAGES:
+        st.session_state["current_page"] = PAGES[0]
 
 
-def navigate_to(page_name: str, workspace: Optional[str] = None, version: Optional[str] = None) -> None:
-    if workspace:
-        st.session_state["active_workspace"] = workspace
-        if workspace not in st.session_state["known_workspaces"]:
-            st.session_state["known_workspaces"].append(workspace)
-    if version:
-        st.session_state["active_model_version"] = str(version)
+def navigate_to(page_name: str) -> None:
     st.session_state["current_page"] = page_name
     st.rerun()
 
 
-# =====================================================================
-# 4. API COMMUNICATION & NATIVE ERROR DISPLAY
-# =====================================================================
+def get_shared_file_tuple() -> Optional[Dict[str, Tuple[str, Any, str]]]:
+    if st.session_state["shared_file_bytes"] is not None:
+        stream = io.BytesIO(st.session_state["shared_file_bytes"])
+        stream.seek(0)
+        return {"file": (st.session_state["shared_file_name"], stream, "text/csv")}
+    return None
+
+
 def format_form_value(val: Any) -> str:
-    """Format form values cleanly so integer floats like 2.0 are sent as '2' if whole."""
-    if isinstance(val, (dict, list)):
-        return json.dumps(val)
-    if isinstance(val, bool):
-        return "true" if val else "false"
-    if isinstance(val, float) and val.is_integer():
-        return str(int(val))
+    if isinstance(val, (dict, list)): return json.dumps(val)
+    if isinstance(val, bool): return "true" if val else "false"
+    if isinstance(val, float) and val.is_integer(): return str(int(val))
     return str(val)
 
 
 def sanitize_api_message(msg: str) -> str:
-    """Strip raw Python/dictionary syntax from API messages for a cleaner UI."""
     text = str(msg)
     text = text.replace("config.plant['location']", "Plant Location Override")
-    text = text.replace("config.plant['rated_power_kw']", "Rated Capacity (kW) Setting")
-    text = text.replace("PowerOptions(rated_power_w=...)", "Power Options JSON (Rated Power)")
-    text = text.replace("prepare_pv_data(..., include_power=True)", "dataset preparation config")
     text = text.replace("dc_power_derived_total_w", "Derived DC Power")
     text = text.replace("dc_power", "Measured DC Power")
     return text
 
 
 def api_call(
-    method: str,
-    endpoint: str,
-    params: Optional[Dict[str, Any]] = None,
-    data: Optional[Dict[str, Any]] = None,
-    files: Optional[Dict[str, Any]] = None,
-    json_body: Optional[Dict[str, Any]] = None,
-    timeout: int = 120,
+    method: str, endpoint: str, data: Optional[Dict[str, Any]] = None,
+    files: Optional[Dict[str, Any]] = None, timeout: int = 120
 ) -> Tuple[bool, int, Any]:
-    """Centralised HTTP helper for HelioIQ API."""
     url = f"{API_BASE_URL}/{endpoint.lstrip('/')}"
-    cleaned_data = None
-    if data:
-        cleaned_data = {
-            k: format_form_value(v)
-            for k, v in data.items()
-            if v is not None and v != ""
-        }
-    cleaned_params = {
-        k: format_form_value(v)
-        for k, v in (params or {}).items()
-        if v is not None and v != ""
-    }
+    cleaned_data = {k: format_form_value(v) for k, v in (data or {}).items() if v is not None and v != ""}
+    
+    upload_files = None
+    if files:
+        upload_files = {}
+        for k, f_tuple in files.items():
+            if isinstance(f_tuple, tuple) and len(f_tuple) == 3:
+                fname, fstream, fmime = f_tuple
+                if hasattr(fstream, "seek"):
+                    fstream.seek(0)
+                upload_files[k] = (fname, fstream, fmime)
+            else:
+                upload_files[k] = f_tuple
 
     try:
-        response = requests.request(
-            method=method.upper(),
-            url=url,
-            params=cleaned_params or None,
-            data=cleaned_data,
-            files=files,
-            json=json_body,
-            timeout=timeout,
-        )
-    except requests.exceptions.ConnectionError:
-        return (
-            False,
-            0,
-            f"Cannot connect to HelioIQ API at {API_BASE_URL}. Ensure Uvicorn is running (uvicorn app.main:app --reload).",
-        )
-    except requests.exceptions.Timeout:
-        return (
-            False,
-            0,
-            f"Request to {endpoint} timed out after {timeout}s. Try a smaller date window or sample CSV.",
-        )
+        response = requests.request(method.upper(), url, data=cleaned_data, files=upload_files, timeout=timeout)
     except requests.exceptions.RequestException as exc:
-        return False, 0, f"Network error calling {endpoint}: {exc}"
-
+        return False, 0, f"Network error: {exc}"
     try:
         payload = response.json()
     except ValueError:
         payload = {"detail": response.text or f"HTTP {response.status_code}"}
-
-    if 200 <= response.status_code < 300:
-        return True, response.status_code, payload
-    return False, response.status_code, payload
+    return (200 <= response.status_code < 300), response.status_code, payload
 
 
 def render_api_error(status_code: int, payload: Any, context: str = "API Request") -> None:
-    """Renders API errors using native Streamlit containers and alerts."""
     detail = payload.get("detail", payload) if isinstance(payload, dict) else str(payload)
-
     with st.container(border=True):
         st.error(f"■ **{context} Failed** {f'(HTTP {status_code})' if status_code else '(Network Error)'}")
-
         if isinstance(detail, list):
             for item in detail:
-                if isinstance(item, dict):
-                    loc = " → ".join(str(x) for x in item.get("loc", []))
-                    msg = item.get("msg", str(item))
-                    st.markdown(f"- **{loc}**: {sanitize_api_message(msg)}" if loc else f"- {sanitize_api_message(msg)}")
-                else:
-                    st.markdown(f"- {sanitize_api_message(item)}")
-        elif isinstance(detail, dict):
-            msg = detail.get("message") or detail.get("error") or detail.get("detail")
-            if msg:
-                st.write(sanitize_api_message(msg))
-            st.json(detail)
+                msg = item.get("msg", str(item)) if isinstance(item, dict) else str(item)
+                st.markdown(f"- {sanitize_api_message(msg)}")
         else:
-            st.write(sanitize_api_message(detail))
-
-        if status_code == 0:
-            st.caption("💡 **Troubleshooting:** Verify the FastAPI server is running in your first terminal at http://127.0.0.1:8000.")
-        elif status_code == 404:
-            st.caption("💡 **Troubleshooting (404):** Train a model first and use the exact workspace and version returned by the API.")
-        elif status_code == 422:
-            st.caption("💡 **Troubleshooting (422):** Check whether your CSV matches the selected Dataset Profile ('trieste_q2' vs 'generic'), or check required columns, dates, and JSON configuration.")
-        elif status_code == 503:
-            st.caption("💡 **Troubleshooting (503):** The API could not load HelioIQ_Backend. Check HELIOIQ_BACKEND_PATH and restart Uvicorn.")
+            msg = detail.get("message") or detail.get("detail") or str(detail) if isinstance(detail, dict) else str(detail)
+            st.write(sanitize_api_message(msg))
 
 
 def render_status_pill(status_val: Any) -> None:
-    """Render a single-line status badge with icon + text label."""
     raw = str(status_val or "unknown").strip()
     low = raw.lower()
     if any(k in low for k in ["ok", "healthy", "normal", "valid", "success", "low", "none", "pass"]):
@@ -271,1400 +308,565 @@ def render_status_pill(status_val: Any) -> None:
         cls, sym, tag = "status-investigate", "■", "INVESTIGATE"
     else:
         cls, sym, tag = "status-neutral", "◆", "INFO"
-
-    html = f'<div style="margin-bottom:0.75rem;"><span class="status-badge {cls}">{sym} {raw.upper()} ({tag})</span></div>'
-    st.markdown(html, unsafe_allow_html=True)
+    render_html(f'<div style="margin-bottom:0.5rem;"><span class="status-badge {cls}">{sym} {raw.upper()} ({tag})</span></div>')
 
 
-# =====================================================================
-# 5. SHARED UI & PLOTLY CHART HELPERS
-# =====================================================================
 def apply_helioiq_plotly_theme(fig: go.Figure, title: str, xaxis_title: str, yaxis_title: str) -> go.Figure:
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15)),
-        font=dict(family="Inter, Segoe UI, sans-serif"),
-        xaxis=dict(
-            title=dict(text=xaxis_title),
-            gridcolor="rgba(22, 50, 79, 0.55)",
-            linecolor=PALETTE["STEEL_BLUE"],
-            zerolinecolor=PALETTE["STEEL_BLUE"],
-        ),
-        yaxis=dict(
-            title=dict(text=yaxis_title),
-            gridcolor="rgba(22, 50, 79, 0.55)",
-            linecolor=PALETTE["STEEL_BLUE"],
-            zerolinecolor=PALETTE["STEEL_BLUE"],
-        ),
-        legend=dict(bordercolor=PALETTE["STEEL_BLUE"], borderwidth=1),
-        hovermode="x unified",
-        margin=dict(l=50, r=30, t=55, b=50),
+        title=dict(text=title, font=dict(size=13, color=PALETTE["WARM_IVORY"])),
+        font=dict(family="Inter, Segoe UI, sans-serif", color=PALETTE["WARM_IVORY"]),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(title=xaxis_title, gridcolor="rgba(37, 57, 76, 0.5)", linecolor=PALETTE["ELEVATED_SURFACE"], zerolinecolor=PALETTE["ELEVATED_SURFACE"]),
+        yaxis=dict(title=yaxis_title, gridcolor="rgba(37, 57, 76, 0.5)", linecolor=PALETTE["ELEVATED_SURFACE"], zerolinecolor=PALETTE["ELEVATED_SURFACE"]),
+        legend=dict(bordercolor=PALETTE["ELEVATED_SURFACE"], borderwidth=1, bgcolor="rgba(0,0,0,0)", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified", margin=dict(l=30, r=20, t=50, b=30),
     )
     return fig
 
 
+import base64
+
 def render_top_bar() -> None:
-    """Consistent top bar using a native bordered container and single-line badge."""
-    ok, _, health = api_call("GET", "/health", timeout=5)
-    if ok and isinstance(health, dict):
-        st.session_state["health_data"] = health
-        api_status = str(health.get("status", "unknown"))
-        backend_info = health.get("backend", {})
-        backend_avail = backend_info.get("available") if isinstance(backend_info, dict) else None
-        if api_status.lower() == "ok" and backend_avail is not False:
-            badge_html = '<span class="status-badge status-healthy">● API & BACKEND ONLINE</span>'
+    ok, _, health = api_call("GET", "/health", timeout=3)
+    badge = f'<div style="border: 1px solid {PALETTE["ELEVATED_SURFACE"]}; padding: 0.25rem 0.6rem; border-radius: 50px; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; font-weight: 700; color: {PALETTE["WARM_IVORY"]};"><span style="color: {PALETTE["ELECTRIC_TEAL"]};">●</span> LIVE</div>' if (ok and isinstance(health, dict) and health.get("status") == "ok") else f'<div style="border: 1px solid {PALETTE["ELEVATED_SURFACE"]}; padding: 0.25rem 0.6rem; border-radius: 50px; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; font-weight: 700; color: {PALETTE["SLATE_SILVER"]};"><span style="color: {PALETTE["ALERT_CORAL"]};">■</span> OFFLINE</div>'
+
+    # Load logo dynamically from file at runtime
+    logo_b64 = ""
+    if os.path.exists("logo.png"):
+        with open("logo.png", "rb") as lf:
+            logo_b64 = base64.b64encode(lf.read()).decode("utf-8")
+
+    render_html('<div style="margin-bottom: 1rem;"></div>')
+    # Expanded logo column width ratio to 1.8 for generous spacing
+    c1, c2, c3 = st.columns([1.8, 5.0, 1.2], vertical_alignment="center")
+    with c1:
+        if logo_b64:
+            # Increased logo height from 38px to 58px
+            render_html(f'<div style="display:flex; align-items:center;"><img src="data:image/png;base64,{logo_b64}" style="height: 58px; object-fit: contain; border-radius: 6px;" alt="HelioIQ Logo"/></div>')
         else:
-            badge_html = f'<span class="status-badge status-caution">▲ API {api_status.upper()} (DEGRADED)</span>'
-    else:
-        st.session_state["health_data"] = None
-        badge_html = '<span class="status-badge status-investigate">■ API OFFLINE</span>'
-
-    ws_html = ""
-    if st.session_state.get("active_workspace"):
-        ver = st.session_state.get("active_model_version") or "latest"
-        ws_html = f'<span class="status-badge status-neutral" style="margin-right:0.5rem;">◆ WORKSPACE: {st.session_state["active_workspace"]} ({ver})</span>'
-
-    with st.container(border=True):
-        c_left, c_right = st.columns([3, 2])
-        with c_left:
-            st.markdown(
-                f'<div style="padding:0.2rem 0;"><span style="font-size:1.35rem; font-weight:800; letter-spacing:0.04em;">HELIO<span style="color:{PALETTE["ELECTRIC_CYAN"]};">IQ</span></span> <span style="color:{PALETTE["MUTED_GREY"]}; margin-left:0.75rem; font-size:0.9rem;">Know what your system should do. Know when it doesn\'t.</span></div>',
-                unsafe_allow_html=True,
-            )
-        with c_right:
-            st.markdown(
-                f'<div style="text-align:right; padding:0.25rem 0;">{ws_html}{badge_html}</div>',
-                unsafe_allow_html=True,
-            )
-
-
-def render_common_dataset_options(prefix: str) -> Tuple[str, Optional[float], Optional[str], Optional[str]]:
-    """Shared dataset configuration controls in a clean 2-column grid without backtick code pills."""
-    col1, col2 = st.columns(2)
-    with col1:
-        dataset_type = st.selectbox(
-            "Dataset Profile",
-            options=["trieste_q2", "generic"],
-            index=0,
-            key=f"{prefix}_dataset",
-            help="Select 'trieste_q2' for the Trieste dataset or 'generic' for custom CSV column schemas.",
-        )
-    with col2:
-        specify_utc = st.checkbox(
-            "Specify Fixed UTC Offset (Hours)",
-            value=False,
-            key=f"{prefix}_specify_utc",
-            help="Enable when computing solar-position features. Do not guess the UTC offset.",
-        )
-        utc_offset = None
-        if specify_utc:
-            utc_offset = st.number_input(
-                "UTC Offset (Hours)",
-                min_value=-12.0,
-                max_value=14.0,
-                value=1.0,
-                step=0.5,
-                key=f"{prefix}_utc_offset",
-            )
-
-    with st.expander("Advanced Backend Configuration (Optional Column Map & Power Options JSON)", expanded=False):
-        st.caption("Optional JSON strings passed directly to the backend without frontend modification.")
-        g1, g2 = st.columns(2)
-        with g1:
-            c_map = st.text_area(
-                "Column Map JSON",
-                placeholder='{"timestamp": "DateTime", "irradiance": "POA"}',
-                height=72,
-                key=f"{prefix}_colmap",
-            )
-        with g2:
-            p_opts = st.text_area(
-                "Power Options JSON",
-                placeholder='{"dc_scaling": 1.0, "rated_power_w": 10000}',
-                height=72,
-                key=f"{prefix}_poweropts",
-            )
-    return dataset_type, utc_offset, c_map.strip() or None, p_opts.strip() or None
-
-
-def build_multipart_file(uploaded_file: Any) -> Dict[str, Tuple[str, bytes, str]]:
-    uploaded_file.seek(0)
-    return {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-
-
-def validate_json_string(raw_text: Optional[str], field_label: str) -> bool:
-    if not raw_text:
-        return True
-    try:
-        json.loads(raw_text)
-        return True
-    except ValueError as exc:
-        st.error(f"Invalid JSON in {field_label}: {exc}")
-        return False
-
-
-def extract_rows_from_payload(payload: Dict[str, Any]) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
-    candidate_keys = [
-        "rows",
-        "predictions",
-        "data",
-        "records",
-        "timeseries",
-        "series",
-        "results",
-        "anomalies",
-        "flagged_rows",
-        "periods",
-        "flagged_periods",
-        "windows",
-        "events",
-    ]
-    for key in candidate_keys:
-        val = payload.get(key)
-        if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
-            return val, key
-    for key, val in payload.items():
-        if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
-            return val, key
-    return None, None
-
-
-# =====================================================================
-# 6. PAGE IMPLEMENTATIONS (01 TO 07)
-# =====================================================================
-
-# ---------------------------------------------------------------------
-# PAGE 01: HOME / DASHBOARD 
-# ---------------------------------------------------------------------
-def page_home() -> None:
-    st.caption("OVERVIEW & TELEMETRY")
-    st.markdown("## Home / Dashboard")
-
-    with st.container(border=True):
-        c_welcome, c_url = st.columns([4, 1])
-        with c_welcome:
-            st.markdown("#### Solar PV Performance Intelligence Platform")
-            st.write(
-                "HelioIQ estimates expected solar PV power under observed environmental conditions, "
-                "compares expected power with observed or defensibly derived power, flags persistent "
-                "deviations for investigation, and supports hypothetical what-if simulation."
-            )
-        with c_url:
-            st.caption("CONNECTED API")
-            st.code(API_BASE_URL, language=None)
-
-    col_h1, col_h2 = st.columns([4, 1])
-    with col_h1:
-        st.markdown("### Live API & Backend Connection")
-    with col_h2:
-        if st.button("↻ Refresh Status", use_container_width=True):
+            render_html(f'<div style="font-size:1.3rem; font-weight:700; color:{PALETTE["WARM_IVORY"]};">HelioIQ</div>')
+    with c2:
+        selected = st.pills("NAV", options=PAGES, default=st.session_state["current_page"], label_visibility="collapsed")
+        if selected and selected != st.session_state["current_page"]:
+            st.session_state["current_page"] = selected
             st.rerun()
+    with c3:
+        render_html(f'<div style="text-align:right;">{badge}</div>')
+# =====================================================================
+# 4. PAGE IMPLEMENTATIONS
+# =====================================================================
 
-    ok, status_code, health_payload = api_call("GET", "/health", timeout=8)
-    if ok and isinstance(health_payload, dict):
-        st.session_state["health_data"] = health_payload
-        status_str = str(health_payload.get("status", "unknown"))
-        backend_obj = health_payload.get("backend", {})
-        backend_avail = backend_obj.get("available") if isinstance(backend_obj, dict) else health_payload.get("backend_available")
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("API HTTP Status", f"{status_code} OK")
-        m2.metric("Service Status", status_str.upper())
-        m3.metric("Backend Engine", "Available (Loaded)" if backend_avail else "Degraded / Unavailable")
-
-        with st.expander("View Raw Health Response Payload", expanded=False):
-            st.json(health_payload)
-    else:
-        render_api_error(status_code, health_payload, context="GET /health Check")
-
-    st.markdown("---")
-
-    st.caption("APPLICATION MODULES")
-    st.markdown("### Core Workflow & Analysis Grid")
-
-    modules = [
-        ("MODULE 02 • STEP 1", "1. Validate Dataset", "Upload a solar PV CSV file, verify schema compatibility, and inspect data quality reports.", "Open Dataset Management →", "02 Dataset Management", "mod_2"),
-        ("MODULE 03 • STEP 2", "2. Train Models", "Train and compare Linear Regression and Random Forest models on chronological hold-out splits.", "Open Model Lab →", "03 Model Lab", "mod_3"),
-        ("MODULE 04 • STEP 3", "3. Analyse Performance", "Compare expected model power against observed or derived DC power across time-series windows.", "Open Performance Analysis →", "04 Performance Analysis", "mod_4"),
-        ("MODULE 05 • DIAGNOSTICS", "4. Anomaly Detection", "Identify persistent deviations and flag potential underperformance periods for investigation.", "Open Anomaly Detection →", "05 Anomaly Detection", "mod_5"),
-        ("MODULE 06 • SCENARIOS", "5. What-if Simulator", "Adjust irradiance and temperature parameters to run hypothetical model re-predictions.", "Open What-if Simulator →", "06 What-if Simulator", "mod_6"),
-        ("MODULE 07 • REGISTRY", "6. Models & Workspaces", "Browse saved model versions and inspect evaluation metadata for known workspaces.", "Open Models & Workspaces →", "07 Models & Workspaces", "mod_7"),
-    ]
-
-    row1 = st.columns(3)
-    for idx in range(3):
-        tag, title, desc, btn_label, target, key = modules[idx]
-        with row1[idx]:
-            with st.container(border=True, height=215):
-                st.caption(tag)
-                st.markdown(f"#### {title}")
-                st.write(desc)
-            if st.button(btn_label, key=key, use_container_width=True):
-                navigate_to(target)
-
-    row2 = st.columns(3)
-    for idx in range(3, 6):
-        tag, title, desc, btn_label, target, key = modules[idx]
-        with row2[idx - 3]:
-            with st.container(border=True, height=215):
-                st.caption(tag)
-                st.markdown(f"#### {title}")
-                st.write(desc)
-            if st.button(btn_label, key=key, use_container_width=True):
-                navigate_to(target)
-
-    st.markdown("---")
-    st.caption("SESSION TELEMETRY")
-    st.markdown("### Current Session Context & Latest API Results")
-    col_ctx1, col_ctx2 = st.columns(2)
-
-    with col_ctx1:
-        with st.container(border=True, height=165):
-            st.caption("ACTIVE MODEL REGISTRY")
-            if st.session_state.get("active_workspace"):
-                st.markdown("#### Active Workspace & Model")
-                st.write(f"**Workspace:** `{st.session_state['active_workspace']}` | **Version:** `{st.session_state.get('active_model_version') or 'latest'}`")
-            else:
-                st.markdown("#### No Active Workspace / Model Yet")
-                st.write("No model has been trained or queried in this session yet. Train a model in **03 Model Lab** or query **07 Models & Workspaces**.")
-
-    with col_ctx2:
-        with st.container(border=True, height=165):
-            st.caption("DATA QUALITY CACHE")
-            if st.session_state.get("last_validation_result"):
-                st.markdown("#### Latest Dataset Validation Available")
-                st.write("A validation response was received from `/datasets/validate` during this session.")
-            else:
-                st.markdown("#### No Dataset Validated Yet")
-                st.write("Uploads are processed temporarily per request. Start in **02 Dataset Management** to validate your CSV.")
-
-
-# ---------------------------------------------------------------------
-# PAGE 02: DATASET MANAGEMENT
-# ---------------------------------------------------------------------
-def page_dataset_management() -> None:
-    st.caption("DATA INGESTION & QUALITY")
-    st.markdown("## Dataset Management")
-    st.info(
-        "**Scientific & Workflow Note:** CSV uploads use `multipart/form-data` and are processed temporarily per request. "
-        "For the Trieste dataset (`trieste_q2`), the power target is **derived DC power**, not measured AC grid output."
+def page_home() -> None:
+    render_html(
+        f"""
+        <div style="background: {PALETTE['DEEP_BLUE']}; padding: 2.5rem 3rem; border-radius: 20px; border: 1px solid {PALETTE['ELEVATED_SURFACE']}; margin-bottom: 1.5rem; position: relative; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+        <div style="position: absolute; right: 8%; top: 50%; transform: translateY(-50%); width: 220px; height: 220px; background: radial-gradient(circle, rgba(247,185,65,0.35) 0%, rgba(247,185,65,0) 70%); filter: blur(30px); border-radius: 50%;"></div>
+        <div style="position: absolute; right: 10%; top: 50%; transform: translateY(-50%); width: 180px; height: 180px; background: radial-gradient(circle, #FFE5B4 0%, {PALETTE['SOLAR_AMBER']} 60%, #D99B26 100%); border-radius: 50%; box-shadow: 0 0 50px rgba(247,185,65,0.7), inset 0 0 20px rgba(255,255,255,0.6);"></div>
+        <div style="position: relative; z-index: 10; width: 68%;">
+            <div style="display: inline-block; padding: 0.3rem 0.9rem; border: 1px solid rgba(247, 185, 65, 0.3); border-radius: 50px; color: {PALETTE['SOLAR_AMBER']}; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1rem;">
+            ✨ Clarity, without the spreadsheets
+            </div>
+            <h1 style="font-size: 3.2rem; font-weight: 800; line-height: 1.08; margin-bottom: 1rem; letter-spacing: -0.02em; color: {PALETTE['WARM_IVORY']};">
+            Know what your <br/>system <br/>should do. <span style="color: {PALETTE['SOLAR_AMBER']};">Know <br/>when it doesn't.</span>
+            </h1>
+            <p style="font-size: 1rem; color: {PALETTE['SLATE_SILVER']}; max-width: 480px; line-height: 1.5; margin-bottom: 1.5rem;">
+            HelioIQ turns sunlight and temperature into a friendly, living picture of plant health—so the next best action feels obvious.
+            </p>
+        </div>
+        </div>
+        """
     )
+    c_btn1, c_btn2, _ = st.columns([3, 3, 4])
+    with c_btn1:
+        if st.button("Bring in your data →", type="primary", use_container_width=True): navigate_to(PAGES[1])
+    with c_btn2:
+        if st.button("Explore a scenario ↗", use_container_width=True): navigate_to(PAGES[2])
 
-    with st.container(border=True):
-        uploaded_file = st.file_uploader(
-            "Upload Solar PV Dataset (CSV)",
-            type=["csv"],
-            help="Supported format: Comma-separated values (.csv) compatible with trieste_q2 or generic schemas.",
-            key="validate_csv_uploader",
-        )
-
-        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("validate")
-
-        if uploaded_file is not None:
-            with st.expander("Raw CSV Source Preview (Unmodified Text View — First 10 Rows)", expanded=False):
-                st.caption("Displayed strictly as raw strings without type coercion, rounding, or mutation.")
-                try:
-                    uploaded_file.seek(0)
-                    preview_df = pd.read_csv(uploaded_file, nrows=10, dtype=str, keep_default_na=False)
-                    st.dataframe(preview_df, use_container_width=True)
-                except Exception as exc:
-                    st.warning(f"Could not render local text preview: {exc}")
-
-        validate_clicked = st.button(
-            "Validate Dataset",
-            disabled=(uploaded_file is None),
-            use_container_width=True,
-        )
-
-    if validate_clicked and uploaded_file is not None:
-        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
-            return
-
-        form_data = {
-            "dataset": dataset_type,
-            "utc_offset_hours": utc_offset,
-            "column_map": col_map,
-            "power_options": power_opts,
-        }
-
-        with st.status("Sending CSV to API for validation...", expanded=True) as status_box:
-            st.write(f"Uploading **{uploaded_file.name}** ({uploaded_file.size / 1024:.1f} KB) with profile **{dataset_type}**...")
-            ok, status_code, payload = api_call(
-                "POST",
-                "/datasets/validate",
-                data=form_data,
-                files=build_multipart_file(uploaded_file),
-            )
-            if ok and isinstance(payload, dict):
-                st.session_state["last_validation_result"] = payload
-                status_box.update(label=f"Validation response received (HTTP {status_code})", state="complete", expanded=False)
-            else:
-                st.session_state["last_validation_result"] = None
-                status_box.update(label=f"Validation failed (HTTP {status_code or 'Network Error'})", state="error", expanded=True)
-                render_api_error(status_code, payload, context="POST /datasets/validate")
-
-    result = st.session_state.get("last_validation_result")
-    if isinstance(result, dict):
+    if st.session_state["shared_file_bytes"] is not None:
         st.markdown("---")
-        st.markdown("### Validation Output")
+        st.markdown("### 📊 Active Plant & Dataset Dashboard")
+        try:
+            df = pd.read_csv(io.BytesIO(st.session_state["shared_file_bytes"]), dtype=str)
+            n_rows = len(df)
+            n_cols = len(df.columns)
+            
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            mc1.metric("Active Dataset", st.session_state.get("shared_file_name", "Dataset.csv"))
+            mc2.metric("Total Records", f"{n_rows:,}")
+            mc3.metric("Data Columns", f"{n_cols}")
+            mc4.metric("Workspace Model", st.session_state.get("active_workspace") or "Not Trained")
 
-        is_valid = result.get("valid", result.get("is_valid", result.get("status") == "ok"))
-        status_label = "VALID" if is_valid is True else ("INVALID" if is_valid is False else str(result.get("status", "COMPLETED")))
-        render_status_pill(status_label)
-
-        metric_candidates = [
-            ("Row Count", result.get("row_count", result.get("n_rows", result.get("rows")))),
-            ("Column Count", result.get("column_count", result.get("n_columns"))),
-            ("Dataset Profile", result.get("dataset", result.get("dataset_type", dataset_type))),
-            ("Target Column", result.get("target_column", result.get("target"))),
-        ]
-        present_metrics = [(label, val) for label, val in metric_candidates if isinstance(val, (int, float, str))]
-        if present_metrics:
-            cols = st.columns(len(present_metrics))
-            for idx, (label, val) in enumerate(present_metrics):
-                cols[idx].metric(label, str(val))
-
-        errors = result.get("errors", result.get("validation_errors", []))
-        warnings = result.get("warnings", result.get("validation_warnings", []))
-
-        if errors:
             with st.container(border=True):
-                st.error(f"■ **Validation Errors ({len(errors) if isinstance(errors, list) else 1})**")
-                for err in (errors if isinstance(errors, list) else [errors]):
-                    st.markdown(f"- {sanitize_api_message(err)}")
-
-        if warnings:
-            with st.container(border=True):
-                st.warning(f"▲ **Validation Warnings ({len(warnings) if isinstance(warnings, list) else 1})**")
-                for warn in (warnings if isinstance(warnings, list) else [warnings]):
-                    st.markdown(f"- {sanitize_api_message(warn)}")
-
-        schema_info = result.get("schema", result.get("columns", result.get("column_details")))
-        if schema_info is not None:
-            with st.container(border=True):
-                st.markdown("#### Returned Schema / Columns")
-                if isinstance(schema_info, list):
-                    if len(schema_info) > 0 and isinstance(schema_info[0], dict):
-                        st.dataframe(pd.DataFrame(schema_info), use_container_width=True)
-                    else:
-                        st.dataframe(pd.DataFrame({"Column": schema_info}), use_container_width=True)
-                elif isinstance(schema_info, dict):
-                    st.json(schema_info)
-
-        quality_info = result.get("quality", result.get("data_quality", result.get("summary", result.get("cleaning_summary"))))
-        if quality_info is not None:
-            with st.container(border=True):
-                st.markdown("#### Data Quality Summary")
+                st.markdown("##### ⚡ Quick Plant Status")
+                render_status_pill("NORMAL")
+                st.write(f"Your dataset **{st.session_state.get('shared_file_name')}** is currently active and loaded across workspaces. You have {n_rows:,} timestamp records ready for machine learning intelligence.")
                 
-                if isinstance(quality_info, dict):
-                    q_rows = quality_info.get("rows", "an unspecified number of")
-                    q_start = quality_info.get("start", "an unknown start date")
-                    q_end = quality_info.get("end", "an unknown end date")
-                    q_target = quality_info.get("observed_power_column")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("Go to Analysis Workspace →", type="primary", use_container_width=True):
+                        navigate_to(PAGES[1])
+                with col_b:
+                    if st.button("Run Simulation ↗", use_container_width=True):
+                        navigate_to(PAGES[2])
+        except Exception as e:
+            st.warning(f"Could not load dashboard metrics: {e}")
+
+
+def page_analysis() -> None:
+    st.markdown("## Analysis Workspace")
+    with st.container(border=True):
+        col_file, col_del, col_btn = st.columns([3.5, 1.2, 1.3])
+        with col_file:
+            uploaded_files = st.file_uploader("Upload PV Datasets (CSV)", type=["csv"], accept_multiple_files=True, label_visibility="collapsed")
+            if uploaded_files:
+                try:
+                    dfs = []
+                    filenames = []
+                    for f in uploaded_files:
+                        filenames.append(f.name)
+                        df_part = pd.read_csv(f, dtype=str)
+                        dfs.append(df_part)
                     
-                    summary_md = f"This dataset spans from **{q_start}** to **{q_end}** with a total of **{q_rows}** recorded intervals."
-                    if q_target:
-                         summary_md += f" The system successfully detected `{q_target}` as the primary power target."
-                    else:
-                         summary_md += " ⚠️ **No power target was automatically detected.** You must explicitly provide a Target Column Override when training."
-                         
-                    dupes = quality_info.get("duplicate_timestamps")
-                    if dupes:
-                        summary_md += f" Note: Found **{dupes}** duplicate timestamps."
-                        
-                    st.markdown(summary_md)
-                    st.caption("Raw Quality Dictionary Metrics:")
-                    st.json(quality_info)
-                elif isinstance(quality_info, list):
-                    st.dataframe(pd.DataFrame(quality_info), use_container_width=True)
-
-        with st.expander("Full API Response JSON (/datasets/validate)", expanded=False):
-            st.json(result)
-
-        with st.container(border=True):
-            st.markdown("#### What to Do Next")
-            st.markdown(
-                "1. If validation errors were flagged above, fix the missing columns, dataset profile (`trieste_q2` vs `generic`), or configuration JSON and re-validate.\n"
-                "2. Once valid, proceed to **03 Model Lab** to train Linear Regression and Random Forest models, or go to **04 Performance Analysis** if you already have a saved workspace model."
-            )
-            n1, n2 = st.columns(2)
-            with n1:
-                if st.button("Proceed to 03 Model Lab →", use_container_width=True):
-                    navigate_to("03 Model Lab")
-            with n2:
-                if st.button("Proceed to 04 Performance Analysis →", use_container_width=True):
-                    navigate_to("04 Performance Analysis")
-
-
-# ---------------------------------------------------------------------
-# PAGE 03: MODEL LAB
-# ---------------------------------------------------------------------
-def page_model_lab() -> None:
-    st.caption("MACHINE LEARNING & EVALUATION")
-    st.markdown("## Model Lab")
-    st.info(
-        "**Model Evaluation Guardrail:** Each training request trains and evaluates Linear Regression and Random Forest models "
-        "on a chronological hold-out split (latest observations held out for evaluation) and saves a new model version in the workspace."
-    )
-
-    with st.container(border=True):
-        uploaded_file = st.file_uploader(
-            "Upload Training CSV",
-            type=["csv"],
-            key="train_csv_uploader",
-            help="CSV file containing environmental features and target power observations.",
-        )
-
-        col_w1, col_w2 = st.columns(2)
-        with col_w1:
-            default_ws = st.session_state.get("active_workspace") or "trieste_demo"
-            workspace = st.text_input(
-                "Workspace Name (Required)",
-                value=default_ws,
-                max_chars=64,
-                help="Letters, numbers, underscore (_), or hyphen (-); maximum 64 characters.",
-            ).strip()
-        with col_w2:
-            test_fraction = st.number_input(
-                "Chronological Hold-out Test Fraction",
-                min_value=0.05,
-                max_value=0.50,
-                value=0.20,
-                step=0.05,
-                help="Default 0.2. The latest chronological portion of the dataset is held out for evaluation.",
-            )
-
-        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("train")
-
-        with st.expander("Optional Target & Feature Overrides", expanded=False):
-            st.caption("Only populate these fields if you know the backend's exact expected column names.")
-            t1, t2 = st.columns(2)
-            with t1:
-                target_col = st.text_input("Target Column Override", value="").strip()
-            with t2:
-                features_raw = st.text_input("Features Override (comma-separated or JSON list)", value="").strip()
-
-        train_clicked = st.button(
-            "Train Models",
-            disabled=(uploaded_file is None or not workspace),
-            use_container_width=True,
-        )
-
-    if train_clicked and uploaded_file is not None:
-        if not WORKSPACE_REGEX.match(workspace):
-            st.error("Workspace must contain only letters, numbers, underscores, or hyphens (1–64 characters).")
-            return
-        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
-            return
-
-        form_data = {
-            "workspace": workspace,
-            "dataset": dataset_type,
-            "utc_offset_hours": utc_offset,
-            "test_fraction": test_fraction,
-            "target": target_col or None,
-            "features": features_raw or None,
-            "column_map": col_map,
-            "power_options": power_opts,
-        }
-        with st.status("Training models via API...", expanded=True) as status_box:
-            st.write(f"Uploading **{uploaded_file.name}** and training Random Forest & Linear Regression models...")
-            ok, status_code, payload = api_call(
-                "POST",
-                "/models/train",
-                data=form_data,
-                files=build_multipart_file(uploaded_file),
-                timeout=300,
-            )
-
-        if ok and isinstance(payload, dict):
-            st.session_state["last_training_result"] = payload
-            ret_ws = payload.get("workspace", workspace)
-            ret_ver = payload.get("version", payload.get("model_version", "latest"))
-            st.session_state["active_workspace"] = ret_ws
-            st.session_state["active_model_version"] = str(ret_ver)
-            if ret_ws not in st.session_state["known_workspaces"]:
-                st.session_state["known_workspaces"].append(ret_ws)
-        else:
-            render_api_error(status_code, payload, context="POST /models/train")
-
-    train_res = st.session_state.get("last_training_result")
-    if isinstance(train_res, dict):
-        st.markdown("---")
-        st.markdown("### Training & Evaluation Results")
-        render_status_pill("SUCCESS")
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Workspace", str(train_res.get("workspace", st.session_state.get("active_workspace", "—"))))
-        c2.metric("Saved Version", str(train_res.get("version", train_res.get("model_version", "latest"))))
-        c3.metric(
-            "Selected / Best Model",
-            str(train_res.get("selected_model", train_res.get("best_model", train_res.get("default_model", "See table")))),
-        )
-        c4.metric(
-            "Target Definition",
-            str(train_res.get("target", train_res.get("target_column", "Derived DC / Power Target"))),
-        )
-
-        eval_info = (
-            train_res.get("evaluation")
-            or train_res.get("split")
-            or train_res.get("holdout")
-            or train_res.get("test_split")
-            or train_res.get("data_split")
-        )
-        holdout_fields = {
-            k: train_res[k]
-            for k in [
-                "train_rows",
-                "test_rows",
-                "n_train",
-                "n_test",
-                "test_fraction",
-                "train_start",
-                "train_end",
-                "test_start",
-                "test_end",
-                "holdout_start",
-                "holdout_end",
-            ]
-            if k in train_res and train_res[k] is not None
-        }
-        if isinstance(eval_info, dict):
-            holdout_fields.update(eval_info)
-
-        if holdout_fields:
-            st.markdown("#### Held-out Evaluation Split Details")
-            st.caption("Observations held out chronologically for model evaluation (as reported by the API):")
-            st.dataframe(pd.DataFrame([holdout_fields]), use_container_width=True)
-
-        model_rows = []
-        raw_models = train_res.get("models", train_res.get("metrics", train_res.get("model_metrics", train_res.get("results"))))
-
-        if isinstance(raw_models, dict):
-            for m_name, m_data in raw_models.items():
-                if isinstance(m_data, dict):
-                    nested_metrics = m_data.get("metrics", m_data)
-                    if isinstance(nested_metrics, dict):
-                        row = {"Model": m_name}
-                        row.update({k: v for k, v in nested_metrics.items() if isinstance(v, (int, float, str))})
-                        model_rows.append(row)
-        elif isinstance(raw_models, list):
-            for item in raw_models:
-                if isinstance(item, dict):
-                    m_name = item.get("model", item.get("name", item.get("model_type", "Model")))
-                    nested_metrics = item.get("metrics", item)
-                    row = {"Model": m_name}
-                    if isinstance(nested_metrics, dict):
-                        row.update({k: v for k, v in nested_metrics.items() if isinstance(v, (int, float, str))})
-                    model_rows.append(row)
-
-        if model_rows:
-            st.markdown("#### Linear Regression vs. Random Forest Comparison")
-            comp_df = pd.DataFrame(model_rows)
-
-            for col in list(comp_df.columns):
-                if col.lower() in ("r2", "r_squared", "r2_score"):
-                    if comp_df[col].isna().all():
-                        comp_df.drop(columns=[col], inplace=True)
-
-            st.dataframe(comp_df, use_container_width=True)
-
-            mae_col = next((c for c in comp_df.columns if c.lower() in ("mae", "test_mae", "mean_absolute_error")), None)
-            rmse_col = next((c for c in comp_df.columns if c.lower() in ("rmse", "test_rmse", "root_mean_squared_error")), None)
-
-            if mae_col or rmse_col:
-                fig = go.Figure()
-                if mae_col:
-                    fig.add_trace(
-                        go.Bar(
-                            x=comp_df["Model"],
-                            y=pd.to_numeric(comp_df[mae_col], errors="coerce"),
-                            name=f"MAE ({mae_col})",
-                            marker_color=PALETTE["ELECTRIC_CYAN"],
-                        )
-                    )
-                if rmse_col:
-                    fig.add_trace(
-                        go.Bar(
-                            x=comp_df["Model"],
-                            y=pd.to_numeric(comp_df[rmse_col], errors="coerce"),
-                            name=f"RMSE ({rmse_col})",
-                            marker_color=PALETTE["ICE_BLUE"],
-                        )
-                    )
-                fig.update_layout(barmode="group")
-                apply_helioiq_plotly_theme(
-                    fig,
-                    title="Held-out Evaluation Error Comparison (Lower is Better)",
-                    xaxis_title="Trained Model Architecture",
-                    yaxis_title="Error Magnitude (Target Power Units)",
-                )
-                st.plotly_chart(fig, theme="streamlit", use_container_width=True)
-
-        with st.expander("Full API Response JSON (/models/train)", expanded=False):
-            st.json(train_res)
-
-
-# ---------------------------------------------------------------------
-# PAGE 04: PERFORMANCE ANALYSIS
-# ---------------------------------------------------------------------
-def page_performance_analysis() -> None:
-    st.caption("HISTORICAL TELEMETRY & RESIDUALS")
-    st.markdown("## Performance Analysis")
-    st.info(
-        "**Scientific Guardrails:**\n"
-        "- **Derived DC Power ≠ Measured AC Power:** For the Trieste dataset, calculated DC targets represent derived DC power, not verified grid-delivered AC production.\n"
-        "- **Predictions are Estimates:** Expected power is model output under observed environmental conditions, not ground truth."
-    )
-
-    with st.container(border=True):
-        uploaded_file = st.file_uploader(
-            "Upload Analysis CSV (Required per request)",
-            type=["csv"],
-            key="perf_csv_uploader",
-        )
-
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            workspace = st.text_input(
-                "Workspace",
-                value=st.session_state.get("active_workspace") or "trieste_demo",
-                key="perf_ws",
-            ).strip()
-        with c2:
-            version = st.text_input(
-                "Model Version",
-                value=st.session_state.get("active_model_version") or "latest",
-                key="perf_ver",
-            ).strip()
-        with c3:
-            group_by = st.selectbox(
-                "Summary Aggregation",
-                options=["", "day", "month"],
-                format_func=lambda x: "None (Overall only)" if x == "" else f"Group by {x.capitalize()}",
-                key="perf_groupby",
-            )
-
-        d1, d2, d3, d4 = st.columns(4)
-        with d1:
-            start_window = st.text_input("Start Date/Time (Optional)", placeholder="YYYY-MM-DD", key="perf_start").strip()
-        with d2:
-            end_window = st.text_input("End Date/Time (Optional)", placeholder="YYYY-MM-DD", key="perf_end").strip()
-        with d3:
-            include_rows = st.checkbox("Include Per-Row Predictions", value=True, key="perf_inc_rows")
-        with d4:
-            max_rows = st.number_input("Max Returned Rows", min_value=10, max_value=50000, value=2000, step=100, key="perf_max_rows")
-
-        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("perf")
-
-        run_perf = st.button(
-            "Run Historical Predictions & Performance Summary",
-            disabled=(uploaded_file is None or not workspace),
-            use_container_width=True,
-        )
-
-    if run_perf and uploaded_file is not None:
-        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
-            return
-
-        common_form = {
-            "workspace": workspace,
-            "version": version or "latest",
-            "dataset": dataset_type,
-            "utc_offset_hours": utc_offset,
-            "start": start_window or None,
-            "end": end_window or None,
-            "include_rows": include_rows,
-            "max_rows": int(max_rows),
-            "column_map": col_map,
-            "power_options": power_opts,
-        }
-
-        with st.status("Generating historical predictions and performance summary...", expanded=True):
-            st.write("Calling `/predictions/historical`...")
-            ok_hist, code_hist, payload_hist = api_call(
-                "POST",
-                "/predictions/historical",
-                data=common_form,
-                files=build_multipart_file(uploaded_file),
-                timeout=180,
-            )
-            st.write("Calling `/performance/summary`...")
-            summary_form = dict(common_form)
-            if group_by:
-                summary_form["group_by"] = group_by
-            ok_sum, code_sum, payload_sum = api_call(
-                "POST",
-                "/performance/summary",
-                data=summary_form,
-                files=build_multipart_file(uploaded_file),
-                timeout=180,
-            )
-
-        if ok_hist and isinstance(payload_hist, dict):
-            st.session_state["last_historical_result"] = payload_hist
-            st.session_state["active_workspace"] = workspace
-            st.session_state["active_model_version"] = version or "latest"
-        else:
-            render_api_error(code_hist, payload_hist, context="POST /predictions/historical")
-
-        if ok_sum and isinstance(payload_sum, dict):
-            st.session_state["last_summary_result"] = payload_sum
-        else:
-            render_api_error(code_sum, payload_sum, context="POST /performance/summary")
-
-    hist_res = st.session_state.get("last_historical_result")
-    sum_res = st.session_state.get("last_summary_result")
-
-    if isinstance(sum_res, dict):
-        st.markdown("---")
-        st.markdown("### Aggregate Performance Summary")
-        metrics_block = sum_res.get("summary", sum_res.get("metrics", sum_res))
-        if isinstance(metrics_block, dict):
-            scalar_items = [(k, v) for k, v in metrics_block.items() if isinstance(v, (int, float, str)) and not isinstance(v, bool)]
-            if scalar_items:
-                cols = st.columns(min(4, len(scalar_items)))
-                for idx, (k, v) in enumerate(scalar_items[:8]):
-                    val_str = f"{v:,.3f}" if isinstance(v, float) else str(v)
-                    cols[idx % len(cols)].metric(k.replace("_", " ").title(), val_str)
-
-        grouped_rows, grp_key = extract_rows_from_payload(sum_res)
-        if grouped_rows:
-            st.markdown(f"#### Grouped Performance Breakdown ({grp_key})")
-            st.dataframe(pd.DataFrame(grouped_rows), use_container_width=True)
-
-        with st.expander("Full /performance/summary JSON Response", expanded=False):
-            st.json(sum_res)
-
-    if isinstance(hist_res, dict):
-        st.markdown("---")
-        st.markdown("### Expected vs. Observed / Derived Target Power")
-
-        unit_label = hist_res.get("units", hist_res.get("power_unit", hist_res.get("unit", "W / kW (as defined by dataset)")))
-        target_def = (
-            "Derived DC Power Target (Trieste Calculated DC — Not Measured AC)"
-            if dataset_type == "trieste_q2"
-            else str(hist_res.get("target_column", hist_res.get("target", "Observed / Derived Target Power")))
-        )
-
-        rows, _ = extract_rows_from_payload(hist_res)
-        if rows:
-            df = pd.DataFrame(rows)
-            time_col = next(
-                (c for c in df.columns if any(t in c.lower() for t in ["time", "date", "timestamp", "dt", "period"])),
-                df.columns[0],
-            )
-            exp_col = next(
-                (c for c in df.columns if any(k in c.lower() for k in ["expected", "predicted", "prediction", "y_pred", "model_power", "pred"])),
-                None,
-            )
-            obs_col = next(
-                (c for c in df.columns if any(k in c.lower() for k in ["observed", "derived", "actual", "target", "y_true", "dc_power", "power_dc"]) and c != exp_col),
-                None,
-            )
-            res_col = next(
-                (c for c in df.columns if any(k in c.lower() for k in ["residual", "error", "deviation", "diff", "delta"])),
-                None,
-            )
-
-            time_range_str = f"{df[time_col].iloc[0]} to {df[time_col].iloc[-1]}" if len(df) > 0 else "N/A"
-            st.caption(f"**Target Definition:** {target_def} | **Units:** {unit_label} | **Displayed Time Range:** {time_range_str} ({len(df)} observations)")
-
-            if exp_col or obs_col:
-                fig_ts = go.Figure()
-                if obs_col:
-                    fig_ts.add_trace(
-                        go.Scatter(
-                            x=df[time_col],
-                            y=pd.to_numeric(df[obs_col], errors="coerce"),
-                            mode="lines",
-                            name=f"Observed / Derived Target ({obs_col})",
-                            line=dict(color=PALETTE["MUTED_GREY"], width=1.8),
-                        )
-                    )
-                if exp_col:
-                    fig_ts.add_trace(
-                        go.Scatter(
-                            x=df[time_col],
-                            y=pd.to_numeric(df[exp_col], errors="coerce"),
-                            mode="lines",
-                            name=f"Expected Power — Model Estimate ({exp_col})",
-                            line=dict(color=PALETTE["ELECTRIC_CYAN"], width=2.2),
-                        )
-                    )
-                apply_helioiq_plotly_theme(
-                    fig_ts,
-                    title=f"Expected vs. {target_def} ({time_range_str})",
-                    xaxis_title=f"Timestamp ({time_col})",
-                    yaxis_title=f"Power ({unit_label})",
-                )
-                st.plotly_chart(fig_ts, theme="streamlit", use_container_width=True)
-
-            if res_col:
-                fig_res = go.Figure()
-                fig_res.add_trace(
-                    go.Scatter(
-                        x=df[time_col],
-                        y=pd.to_numeric(df[res_col], errors="coerce"),
-                        mode="lines",
-                        name=f"Residual / Deviation ({res_col})",
-                        line=dict(color=PALETTE["ICE_BLUE"], width=1.6),
-                        fill="tozeroy",
-                        fillcolor="rgba(22, 50, 79, 0.35)",
-                    )
-                )
-                apply_helioiq_plotly_theme(
-                    fig_res,
-                    title=f"Returned Residual / Error Series ({res_col})",
-                    xaxis_title=f"Timestamp ({time_col})",
-                    yaxis_title=f"Residual ({unit_label})",
-                )
-                st.plotly_chart(fig_res, theme="streamlit", use_container_width=True)
-
-            with st.expander("Inspect Returned Historical Prediction Rows", expanded=False):
-                st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No per-row series returned in this response. Ensure 'Include Per-Row Predictions' is enabled to plot time-series points.")
-
-        with st.expander("Full /predictions/historical JSON Response", expanded=False):
-            st.json(hist_res)
-
-
-# ---------------------------------------------------------------------
-# PAGE 05: ANOMALY DETECTION
-# ---------------------------------------------------------------------
-def page_anomaly_detection() -> None:
-    st.caption("DEVIATION DIAGNOSTICS")
-    st.markdown("## Anomaly Detection")
-    st.warning(
-        "**Investigation Guardrail:** Flagged periods indicate **potential underperformance requiring investigation**, "
-        "not confirmed inverter, panel, or equipment faults. Thresholds are prototype defaults and have not been calibrated against labelled real faults."
-    )
-
-    with st.container(border=True):
-        uploaded_file = st.file_uploader(
-            "Upload CSV for Anomaly Analysis",
-            type=["csv"],
-            key="anom_csv_uploader",
-        )
-
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            workspace = st.text_input(
-                "Workspace",
-                value=st.session_state.get("active_workspace") or "trieste_demo",
-                key="anom_ws",
-            ).strip()
-        with c2:
-            version = st.text_input(
-                "Model Version",
-                value=st.session_state.get("active_model_version") or "latest",
-                key="anom_ver",
-            ).strip()
-        with c3:
-            start_win = st.text_input("Start Window (Optional)", placeholder="YYYY-MM-DD", key="anom_start").strip()
-        with c4:
-            end_win = st.text_input("End Window (Optional)", placeholder="YYYY-MM-DD", key="anom_end").strip()
-
-        include_rows = st.checkbox("Include Row-Level Anomaly Details", value=True, key="anom_inc_rows")
-        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options("anom")
-
-        run_anom = st.button(
-            "Analyse Potential Anomalies",
-            disabled=(uploaded_file is None or not workspace),
-            use_container_width=True,
-        )
-
-    if run_anom and uploaded_file is not None:
-        if not validate_json_string(col_map, "Column Map JSON") or not validate_json_string(power_opts, "Power Options JSON"):
-            return
-
-        form_data = {
-            "workspace": workspace,
-            "version": version or "latest",
-            "dataset": dataset_type,
-            "utc_offset_hours": utc_offset,
-            "start": start_win or None,
-            "end": end_win or None,
-            "include_rows": include_rows,
-            "column_map": col_map,
-            "power_options": power_opts,
-        }
-        with st.spinner("Analysing persistent deviations via POST /anomalies/analyze..."):
-            ok, status_code, payload = api_call(
-                "POST",
-                "/anomalies/analyze",
-                data=form_data,
-                files=build_multipart_file(uploaded_file),
-                timeout=180,
-            )
-
-        if ok and isinstance(payload, dict):
-            st.session_state["last_anomaly_result"] = payload
-        else:
-            render_api_error(status_code, payload, context="POST /anomalies/analyze")
-
-    anom_res = st.session_state.get("last_anomaly_result")
-    if isinstance(anom_res, dict):
-        st.markdown("---")
-        st.markdown("### Potential Underperformance & Deviation Summary")
-
-        summary_obj = anom_res.get("summary", anom_res)
-        overall_status = (
-            anom_res.get("status")
-            or (summary_obj.get("status") if isinstance(summary_obj, dict) else None)
-            or anom_res.get("severity")
-        )
-        anom_count = (
-            anom_res.get("anomaly_count")
-            if "anomaly_count" in anom_res
-            else (
-                summary_obj.get("anomaly_count", summary_obj.get("flagged_count", summary_obj.get("n_anomalies")))
-                if isinstance(summary_obj, dict)
-                else None
-            )
-        )
-
-        if overall_status is not None:
-            render_status_pill(overall_status)
-        elif isinstance(anom_count, int):
-            render_status_pill("NORMAL (0 FLAGGED)" if anom_count == 0 else f"{anom_count} FLAGGED FOR INVESTIGATION")
-
-        if isinstance(summary_obj, dict):
-            scalars = [(k, v) for k, v in summary_obj.items() if isinstance(v, (int, float, str)) and not isinstance(v, bool)]
-            if scalars:
-                cols = st.columns(min(4, len(scalars)))
-                for idx, (k, v) in enumerate(scalars[:8]):
-                    val_str = f"{v:,.3f}" if isinstance(v, float) else str(v)
-                    cols[idx % len(cols)].metric(k.replace("_", " ").title(), val_str)
-
-        for key_candidate, title_label in [
-            ("flagged_periods", "Flagged Time Periods for Investigation"),
-            ("periods", "Flagged Time Periods for Investigation"),
-            ("events", "Flagged Deviation Events"),
-            ("anomalies", "Flagged Observations / Anomalies"),
-            ("rows", "Analysed Observations"),
-        ]:
-            records = anom_res.get(key_candidate)
-            if isinstance(records, list) and len(records) > 0 and isinstance(records[0], dict):
-                st.markdown(f"#### {title_label} ({len(records)} records)")
-                df_records = pd.DataFrame(records)
-                st.dataframe(df_records, use_container_width=True)
-
-                time_col = next((c for c in df_records.columns if any(t in c.lower() for t in ["time", "date", "start", "timestamp"])), None)
-                dev_col = next((c for c in df_records.columns if any(d in c.lower() for d in ["deviation", "residual", "error", "deficit", "diff"])), None)
-                if time_col and dev_col:
-                    fig_anom = go.Figure()
-                    fig_anom.add_trace(
-                        go.Scatter(
-                            x=df_records[time_col],
-                            y=pd.to_numeric(df_records[dev_col], errors="coerce"),
-                            mode="lines+markers",
-                            name=f"Deviation ({dev_col})",
-                            line=dict(color=PALETTE["AMBER"], width=1.8),
-                            marker=dict(color=PALETTE["RED"], size=6, symbol="diamond"),
-                        )
-                    )
-                    apply_helioiq_plotly_theme(
-                        fig_anom,
-                        title=f"Flagged Potential Underperformance Deviations ({dev_col})",
-                        xaxis_title=f"Time ({time_col})",
-                        yaxis_title=f"Deviation ({dev_col})",
-                    )
-                    st.plotly_chart(fig_anom, theme="streamlit", use_container_width=True)
-                break
-
-        with st.container(border=True):
-            st.markdown("#### Investigation Prompt")
-            st.write(
-                "Review flagged timestamps against local irradiance sensor cleaning logs, shading conditions, "
-                "curtailment schedules, or data logger dropouts before scheduling field maintenance. "
-                "Do not treat statistical deviation flags alone as confirmed hardware failure."
-            )
-
-        with st.expander("Full /anomalies/analyze JSON Response", expanded=False):
-            st.json(anom_res)
-
-
-# ---------------------------------------------------------------------
-# PAGE 06: WHAT-IF SIMULATOR
-# ---------------------------------------------------------------------
-def page_whatif_simulator() -> None:
-    st.caption("HYPOTHETICAL SCENARIO MODELLING")
-    st.markdown("## What-if Simulator")
-    st.info(
-        "**Simulation Guardrail:** What-if outputs are **hypothetical statistical model re-predictions** under adjusted scenario inputs. "
-        "They are not physical PV simulations or a guarantee of real-world energy production."
-    )
-
-    reset_key = st.session_state["whatif_reset_counter"]
-
-    with st.container(border=True):
-        uploaded_file = st.file_uploader(
-            "Upload Baseline CSV for Simulation",
-            type=["csv"],
-            key=f"whatif_csv_{reset_key}",
-        )
-
-        c1, c2 = st.columns(2)
-        with c1:
-            workspace = st.text_input(
-                "Workspace",
-                value=st.session_state.get("active_workspace") or "trieste_demo",
-                key=f"whatif_ws_{reset_key}",
-            ).strip()
-        with c2:
-            version = st.text_input(
-                "Model Version",
-                value=st.session_state.get("active_model_version") or "latest",
-                key=f"whatif_ver_{reset_key}",
-            ).strip()
-
-        st.markdown("#### Scenario Input Controls")
-        st.caption("Adjust environmental scenario parameters with explicit units and validated ranges.")
-
-        s1, s2, s3 = st.columns(3)
-        with s1:
-            irradiance_factor = st.number_input(
-                "Irradiance Multiplier (ratio [×])",
-                min_value=0.0,
-                max_value=2.0,
-                value=1.10,
-                step=0.05,
-                key=f"whatif_irr_factor_{reset_key}",
-                help="E.g. 1.10 = +10% solar irradiance (W/m²). Validated range: 0.0× to 2.0×.",
-            )
-        with s2:
-            irradiance_delta = st.number_input(
-                "Irradiance Offset (W/m²)",
-                min_value=-1000.0,
-                max_value=1000.0,
-                value=0.0,
-                step=25.0,
-                key=f"whatif_irr_delta_{reset_key}",
-                help="Additive change to irradiance in W/m².",
-            )
-        with s3:
-            temp_delta = st.number_input(
-                "Temperature Offset (°C)",
-                min_value=-30.0,
-                max_value=30.0,
-                value=0.0,
-                step=1.0,
-                key=f"whatif_temp_delta_{reset_key}",
-                help="Additive shift to ambient/module temperature in °C.",
-            )
-
-        with st.expander("Custom Scenario JSON Override (Optional)", expanded=False):
-            custom_scenario_json = st.text_area(
-                "Scenario JSON",
-                value="",
-                placeholder='{"irradiance_scale": 1.1, "temperature_delta_c": 2.0}',
-                key=f"whatif_custom_json_{reset_key}",
-            ).strip()
-
-        dataset_type, utc_offset, col_map, power_opts = render_common_dataset_options(f"whatif_{reset_key}")
-
-        btn_col1, btn_col2 = st.columns([3, 1])
-        with btn_col1:
-            run_sim = st.button(
-                "Run Simulation",
-                disabled=(uploaded_file is None or not workspace),
-                use_container_width=True,
-            )
-        with btn_col2:
-            if st.button("Reset Scenario Controls", use_container_width=True):
-                st.session_state["whatif_reset_counter"] += 1
-                st.session_state["last_whatif_result"] = None
-                st.rerun()
-
-    if run_sim and uploaded_file is not None:
-        if (
-            not validate_json_string(custom_scenario_json, "Scenario JSON")
-            or not validate_json_string(col_map, "Column Map JSON")
-            or not validate_json_string(power_opts, "Power Options JSON")
-        ):
-            return
-
-        scenario_dict = {
-            "irradiance_factor": irradiance_factor,
-            "irradiance_scale": irradiance_factor,
-            "irradiance_delta": irradiance_delta,
-            "temperature_delta": temp_delta,
-            "temperature_delta_c": temp_delta,
-        }
-        if custom_scenario_json:
-            parsed_custom = json.loads(custom_scenario_json)
-            if isinstance(parsed_custom, dict):
-                scenario_dict.update(parsed_custom)
-
-        form_data = {
-            "workspace": workspace,
-            "version": version or "latest",
-            "dataset": dataset_type,
-            "utc_offset_hours": utc_offset,
-            "irradiance_factor": irradiance_factor,
-            "irradiance_scale": irradiance_factor,
-            "irradiance_delta": irradiance_delta,
-            "temperature_delta": temp_delta,
-            "temperature_delta_c": temp_delta,
-            "scenario": json.dumps(scenario_dict),
-            "adjustments": json.dumps(scenario_dict),
-            "column_map": col_map,
-            "power_options": power_opts,
-        }
-
-        with st.spinner("Running hypothetical what-if simulation via POST /simulations/what-if..."):
-            ok, status_code, payload = api_call(
-                "POST",
-                "/simulations/what-if",
-                data=form_data,
-                files=build_multipart_file(uploaded_file),
-                timeout=180,
-            )
-
-        if ok and isinstance(payload, dict):
-            st.session_state["last_whatif_result"] = payload
-        else:
-            render_api_error(status_code, payload, context="POST /simulations/what-if")
-
-    sim_res = st.session_state.get("last_whatif_result")
-    if isinstance(sim_res, dict):
-        st.markdown("---")
-        st.markdown("### Hypothetical Simulation Output (Not a Real-World Production Guarantee)")
-        render_status_pill("HYPOTHETICAL SIMULATION")
-
-        summary_block = sim_res.get("summary", sim_res.get("comparison", sim_res.get("metrics", sim_res)))
-        if isinstance(summary_block, dict):
-            scalars = [(k, v) for k, v in summary_block.items() if isinstance(v, (int, float, str)) and not isinstance(v, bool)]
-            if scalars:
-                cols = st.columns(min(4, len(scalars)))
-                for idx, (k, v) in enumerate(scalars[:8]):
-                    val_str = f"{v:,.3f}" if isinstance(v, float) else str(v)
-                    cols[idx % len(cols)].metric(k.replace("_", " ").title(), val_str)
-
-        rows, _ = extract_rows_from_payload(sim_res)
-        if rows:
-            df_sim = pd.DataFrame(rows)
-            time_col = next((c for c in df_sim.columns if any(t in c.lower() for t in ["time", "date", "timestamp"])), df_sim.columns[0])
-            base_col = next((c for c in df_sim.columns if any(b in c.lower() for b in ["baseline", "expected", "original", "base"])), None)
-            hyp_col = next((c for c in df_sim.columns if any(h in c.lower() for h in ["simulated", "what_if", "whatif", "hypothetical", "scenario_power"])), None)
-
-            if base_col or hyp_col:
-                fig_sim = go.Figure()
-                if base_col:
-                    fig_sim.add_trace(
-                        go.Scatter(
-                            x=df_sim[time_col],
-                            y=pd.to_numeric(df_sim[base_col], errors="coerce"),
-                            mode="lines",
-                            name=f"Baseline Expected Power ({base_col})",
-                            line=dict(color=PALETTE["MUTED_GREY"], width=1.8, dash="dot"),
-                        )
-                    )
-                if hyp_col:
-                    fig_sim.add_trace(
-                        go.Scatter(
-                            x=df_sim[time_col],
-                            y=pd.to_numeric(df_sim[hyp_col], errors="coerce"),
-                            mode="lines",
-                            name=f"Hypothetical Simulated Output ({hyp_col})",
-                            line=dict(color=PALETTE["ELECTRIC_CYAN"], width=2.2),
-                        )
-                    )
-                apply_helioiq_plotly_theme(
-                    fig_sim,
-                    title="Hypothetical What-if Prediction vs. Baseline Model Estimate",
-                    xaxis_title=f"Timestamp ({time_col})",
-                    yaxis_title="Power (Dataset Target Units)",
-                )
-                st.plotly_chart(fig_sim, theme="streamlit", use_container_width=True)
-
-            with st.expander("Inspect Returned Simulation Rows", expanded=False):
-                st.dataframe(df_sim, use_container_width=True)
-
-        with st.expander("Full /simulations/what-if JSON Response", expanded=False):
-            st.json(sim_res)
-
-
-# ---------------------------------------------------------------------
-# PAGE 07: MODELS & WORKSPACES
-# ---------------------------------------------------------------------
-def page_models_workspaces() -> None:
-    st.caption("MODEL REGISTRY & VERSIONING")
-    st.markdown("## Models & Workspaces")
-    st.info(
-        "**API Architecture Note:** The HelioIQ API does not expose a global workspace-discovery endpoint. "
-        "Enter a known workspace name below (or select one used earlier in this session) to query model versions and details."
-    )
-
-    known_ws = st.session_state.get("known_workspaces", [])
-    with st.container(border=True):
-        col_w1, col_w2 = st.columns([2, 1])
-        with col_w1:
-            default_ws = st.session_state.get("active_workspace") or (known_ws[0] if known_ws else "trieste_demo")
-            workspace_input = st.text_input(
-                "Enter Known Workspace Name",
-                value=default_ws,
-                max_chars=64,
-            ).strip()
-        with col_w2:
-            if known_ws:
-                selected_session_ws = st.selectbox(
-                    "Or Pick Session Workspace",
-                    options=["(use text input)"] + known_ws,
-                )
-                if selected_session_ws != "(use text input)":
-                    workspace_input = selected_session_ws
-
-        fetch_versions = st.button(
-            f"List Versions in Workspace ({workspace_input or 'workspace'})",
-            disabled=not workspace_input,
-            use_container_width=True,
-        )
-
-    if fetch_versions and workspace_input:
-        ok, status_code, payload = api_call("GET", f"/models/{workspace_input}")
-        if ok:
-            st.session_state["workspace_versions_payload"] = payload
-            st.session_state["active_workspace"] = workspace_input
-            if workspace_input not in st.session_state["known_workspaces"]:
-                st.session_state["known_workspaces"].append(workspace_input)
-        else:
-            render_api_error(status_code, payload, context=f"GET /models/{workspace_input}")
-
-    ws_payload = st.session_state.get("workspace_versions_payload")
-    version_options = ["latest"]
-
-    if ws_payload is not None:
-        st.markdown("---")
-        st.markdown(f"### Returned Model Versions for `{st.session_state.get('active_workspace')}`")
-
-        if isinstance(ws_payload, dict):
-            v_list = ws_payload.get("versions", ws_payload.get("models", ws_payload.get("items", [])))
-            if isinstance(v_list, list):
-                if len(v_list) > 0 and isinstance(v_list[0], dict):
-                    df_v = pd.DataFrame(v_list)
-                    st.dataframe(df_v, use_container_width=True)
-                    ver_col = next((c for c in df_v.columns if "version" in c.lower() or "id" in c.lower()), df_v.columns[0])
-                    version_options.extend([str(v) for v in df_v[ver_col].tolist() if str(v) not in version_options])
-                else:
-                    st.dataframe(pd.DataFrame({"Version": v_list}), use_container_width=True)
-                    version_options.extend([str(v) for v in v_list if str(v) not in version_options])
-            else:
-                st.json(ws_payload)
-        elif isinstance(ws_payload, list):
-            st.dataframe(pd.DataFrame(ws_payload), use_container_width=True)
-
-        with st.expander("Raw GET /models/{workspace} Response", expanded=False):
-            st.json(ws_payload)
-
-    st.markdown("---")
-    st.markdown("### Inspect Specific Model Version")
-    with st.container(border=True):
-        v_col1, v_col2 = st.columns([3, 1])
-        with v_col1:
-            version_to_query = st.text_input(
-                "Version Identifier (use 'latest' for newest)",
-                value=version_options[-1] if len(version_options) > 1 else "latest",
-            ).strip()
-        with v_col2:
+                    combined_df = pd.concat(dfs, ignore_index=True)
+                    csv_buffer = io.StringIO()
+                    combined_df.to_csv(csv_buffer, index=False)
+                    bytes_data = csv_buffer.getvalue().encode('utf-8')
+                    combined_name = f"combined_{len(filenames)}_files.csv"
+
+                    if st.session_state["shared_file_bytes"] != bytes_data:
+                        st.session_state["shared_file_bytes"] = bytes_data
+                        st.session_state["shared_file_name"] = combined_name
+                        st.session_state["last_validation_result"] = None
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error combining uploaded files: {e}")
+        with col_del:
             st.write("")
-            inspect_btn = st.button(
-                "Get Version Details",
-                disabled=not (workspace_input and version_to_query),
-                use_container_width=True,
-            )
+            if st.button("🗑️ Remove File", disabled=st.session_state["shared_file_bytes"] is None, use_container_width=True):
+                st.session_state["shared_file_bytes"] = None
+                st.session_state["shared_file_name"] = None
+                st.session_state["last_validation_result"] = None
+                st.session_state["last_training_result"] = None
+                st.session_state["last_historical_result"] = None
+                st.session_state["last_summary_result"] = None
+                st.session_state["last_anomaly_result"] = None
+                st.rerun()
+        with col_btn:
+            st.write("")
+            if st.button("Validate Dataset", disabled=st.session_state["shared_file_bytes"] is None, use_container_width=True, type="primary"):
+                form_data = {"dataset": st.session_state["dataset_profile"], "utc_offset_hours": st.session_state["utc_offset"]}
+                ok, code, payload = api_call("POST", "/datasets/validate", data=form_data, files=get_shared_file_tuple())
+                if ok:
+                    st.session_state["last_validation_result"] = payload
+                    if hasattr(st, "toast"): st.toast("✅ Dataset validated successfully!", icon="✅")
+                else: render_api_error(code, payload, "Dataset Validation")
 
-    if inspect_btn and workspace_input and version_to_query:
-        ok_v, code_v, payload_v = api_call("GET", f"/models/{workspace_input}/{version_to_query}")
-        if ok_v and isinstance(payload_v, dict):
-            st.session_state["version_detail_payload"] = payload_v
-            st.session_state["active_workspace"] = workspace_input
-            st.session_state["active_model_version"] = str(payload_v.get("version", version_to_query))
+    if not st.session_state["shared_file_bytes"]:
+        st.info("Upload a CSV dataset above to begin exploring your data.")
+        return
+
+    tab_over, tab_train, tab_pred, tab_anom = st.tabs(["Overview", "Train Model", "Predictions", "Anomalies"])
+
+    with tab_over:
+        st.markdown("#### Dataset Explorer")
+        try:
+            df = pd.read_csv(io.BytesIO(st.session_state["shared_file_bytes"]), dtype=str)
+            n_rows = len(df)
+            n_cols = len(df.columns)
+            st.write(f"This dataset contains **{n_rows:,}** rows and **{n_cols}** columns.")
+            
+            with st.container(border=True):
+                st.markdown("##### 💡 Plain-English Explanation")
+                st.write(f"Your uploaded dataset (`{st.session_state['shared_file_name']}`) contains chronological time-series records of your solar power plant. It measures environmental factors like sunlight intensity (irradiance), module temperature, and electrical power generation across **{n_rows:,} timestamps**.")
+                
+                st.markdown("##### ⚠️ Risk & Health Status")
+                render_status_pill("NORMAL")
+                st.write("**Assessment:** Dataset structure is healthy and ready for performance intelligence.")
+
+                st.markdown("##### 🛠️ Recommended Next Steps")
+                st.markdown("1. **Validate Dataset:** Click the **Validate Dataset** button at the top to ensure column headers conform correctly.")
+                st.markdown("2. **Train a Model:** Go to the **Train Model** tab above to train a baseline machine learning model.")
+                st.markdown("3. **Analyze Performance:** Use the **Predictions** and **Anomalies** tabs to inspect energy output.")
+
+            with st.expander("Raw Data Preview", expanded=False):
+                st.dataframe(df.head(15), use_container_width=True)
+
+            time_cols = [c for c in df.columns if 'time' in c.lower() or 'date' in c.lower() or 'stamp' in c.lower()]
+            irr_cols = [c for c in df.columns if 'irradiance' in c.lower() or c == 'G']
+            if time_cols and irr_cols:
+                tc, ic = time_cols[0], irr_cols[0]
+                plot_df = df[[tc, ic]].dropna().copy()
+                plot_df[ic] = pd.to_numeric(plot_df[ic], errors='coerce')
+                if len(plot_df) > 5000: plot_df = plot_df.iloc[::max(1, len(plot_df)//1000)]
+                fig = go.Figure(go.Scatter(x=plot_df[tc], y=plot_df[ic], mode='lines', line=dict(color=PALETTE["SOLAR_AMBER"], width=1)))
+                fig = apply_helioiq_plotly_theme(fig, f"Irradiance Overview ({ic})", "Time", "Irradiance (W/m²)")
+                st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Could not parse CSV for local overview: {e}")
+
+    with tab_train:
+        st.markdown("#### Train a New Model")
+        with st.container(border=True):
+            st.write(f"Training on active dataset: **{st.session_state['shared_file_name']}**")
+            c1, c2 = st.columns(2)
+            workspace_input = c1.text_input("Workspace Name", value=st.session_state.get("active_workspace") or "trieste_demo")
+            test_frac = c2.number_input("Hold-out Test Fraction", 0.05, 0.5, 0.2, 0.05)
+            
+            if st.button("Train Model", type="primary", use_container_width=True):
+                if not WORKSPACE_REGEX.match(workspace_input):
+                    st.error("Invalid workspace name format.")
+                else:
+                    form_data = {
+                        "workspace": workspace_input,
+                        "dataset": st.session_state["dataset_profile"],
+                        "utc_offset_hours": st.session_state["utc_offset"],
+                        "test_fraction": test_frac,
+                    }
+                    with st.spinner("Training models via POST /models/train..."):
+                        ok, status_code, payload = api_call("POST", "/models/train", data=form_data, files=get_shared_file_tuple(), timeout=300)
+                        if ok and isinstance(payload, dict):
+                            st.session_state["last_training_result"] = payload
+                            st.session_state["active_workspace"] = payload.get("workspace", workspace_input)
+                            st.session_state["active_model_version"] = str(payload.get("version", "latest"))
+                            st.success("✅ Model trained and saved successfully!")
+                        else:
+                            render_api_error(status_code, payload, "POST /models/train")
+
+        train_res = st.session_state.get("last_training_result")
+        if train_res and isinstance(train_res, dict):
+            st.markdown("---")
+            st.markdown("##### Training & Evaluation Results")
+            render_status_pill("SUCCESS")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Workspace", str(train_res.get("workspace", st.session_state.get("active_workspace", "—"))))
+            c2.metric("Saved Version", str(train_res.get("version", "latest")))
+            c3.metric("Selected Model", str(train_res.get("selected_model", "Random Forest")).replace("_", " ").title())
+            c4.metric("Target", str(train_res.get("target", "Derived DC")))
+
+    with tab_pred:
+        st.markdown("#### Performance Analysis")
+        if not st.session_state["active_workspace"]:
+            st.warning("⚠️ **No active model loaded.** Train a model in the **Train Model** tab first.")
         else:
-            render_api_error(code_v, payload_v, context=f"GET /models/{workspace_input}/{version_to_query}")
+            c1, c2, c3, c4 = st.columns(4)
+            start_date = c1.text_input("Start Date (Optional)", key="pred_start", placeholder="YYYY-MM-DD")
+            end_date = c2.text_input("End Date (Optional)", key="pred_end", placeholder="YYYY-MM-DD")
+            group_by = c3.selectbox("Aggregation", ["None", "day", "month"], key="pred_group")
+            if c4.button("Run Predictions", use_container_width=True, type="primary"):
+                form_data = {
+                    "workspace": st.session_state["active_workspace"],
+                    "version": st.session_state.get("active_model_version") or "latest",
+                    "dataset": st.session_state["dataset_profile"],
+                    "utc_offset_hours": st.session_state["utc_offset"],
+                    "start": start_date or None,
+                    "end": end_date or None,
+                    "include_rows": "true",
+                }
+                with st.spinner("Generating predictions..."):
+                    ok_hist, code_hist, payload_hist = api_call("POST", "/predictions/historical", data=form_data, files=get_shared_file_tuple())
+                    if ok_hist and isinstance(payload_hist, dict):
+                        st.session_state["last_historical_result"] = payload_hist
+                    else:
+                        render_api_error(code_hist, payload_hist, "POST /predictions/historical")
+                    
+                    sum_form = dict(form_data)
+                    if group_by != "None": sum_form["group_by"] = group_by
+                    ok_sum, code_sum, payload_sum = api_call("POST", "/performance/summary", data=sum_form, files=get_shared_file_tuple())
+                    if ok_sum and isinstance(payload_sum, dict):
+                        st.session_state["last_summary_result"] = payload_sum
+                    else:
+                        render_api_error(code_sum, payload_sum, "POST /performance/summary")
 
-    ver_detail = st.session_state.get("version_detail_payload")
-    if isinstance(ver_detail, dict):
-        st.markdown("#### Returned Model Version Metadata")
-        scalar_fields = {k: v for k, v in ver_detail.items() if isinstance(v, (int, float, str, bool))}
-        if scalar_fields:
-            st.dataframe(pd.DataFrame([scalar_fields]), use_container_width=True)
+            hist_res = st.session_state.get("last_historical_result")
+            if hist_res and isinstance(hist_res, dict):
+                rows = hist_res.get("rows", hist_res.get("data", []))
+                if isinstance(rows, list) and len(rows) > 0:
+                    df_hist = pd.DataFrame(rows)
+                    try:
+                        time_col = next((c for c in df_hist.columns if 'time' in c.lower() or 'date' in c.lower() or 'stamp' in c.lower()), df_hist.columns[0])
+                        actual_col = next((c for c in df_hist.columns if 'observed' in c.lower() or 'actual' in c.lower() or 'power' in c.lower()), None)
+                        expected_col = next((c for c in df_hist.columns if 'expected' in c.lower() or 'baseline' in c.lower() or 'predicted' in c.lower()), None)
 
-        st.json(ver_detail)
+                        if actual_col and expected_col:
+                            df_hist[time_col] = pd.to_datetime(df_hist[time_col], errors='coerce')
+                            df_hist = df_hist.sort_values(by=time_col)
 
-        st.markdown("#### Use Selected Model In:")
-        nav1, nav2 = st.columns(2)
-        selected_ws = st.session_state.get("active_workspace") or workspace_input
-        selected_ver = st.session_state.get("active_model_version") or version_to_query
-        with nav1:
-            if st.button(
-                f"Open 04 Performance Analysis ({selected_ws} / {selected_ver}) →",
-                use_container_width=True,
-            ):
-                navigate_to("04 Performance Analysis", workspace=selected_ws, version=selected_ver)
-        with nav2:
-            if st.button(
-                f"Open 06 What-if Simulator ({selected_ws} / {selected_ver}) →",
-                use_container_width=True,
-            ):
-                navigate_to("06 What-if Simulator", workspace=selected_ws, version=selected_ver)
+                            if group_by == "month":
+                                df_hist['period'] = df_hist[time_col].dt.to_period('M').astype(str)
+                                chart_group_col = 'period'
+                                chart_title = "Monthly Actual vs. Expected Energy Comparison"
+                                x_axis_title = "Month"
+                            else:
+                                df_hist['date'] = df_hist[time_col].dt.date
+                                chart_group_col = 'date'
+                                chart_title = "Daily Actual vs. Expected Energy Comparison"
+                                x_axis_title = "Date"
+
+                            df_grouped = df_hist.groupby(chart_group_col).agg({
+                                actual_col: 'sum',
+                                expected_col: 'sum'
+                            }).reset_index()
+
+                            fig_pred = go.Figure()
+                            fig_pred.add_trace(go.Bar(
+                                x=df_grouped[chart_group_col], y=pd.to_numeric(df_grouped[actual_col], errors='coerce'),
+                                name='Actual Energy (Observed)',
+                                marker_color=PALETTE["ALERT_CORAL"]
+                            ))
+                            fig_pred.add_trace(go.Bar(
+                                x=df_grouped[chart_group_col], y=pd.to_numeric(df_grouped[expected_col], errors='coerce'),
+                                name='Expected Energy (Baseline)',
+                                marker_color=PALETTE["SIGNAL_BLUE"]
+                            ))
+                            fig_pred.update_layout(barmode='group')
+                            fig_pred = apply_helioiq_plotly_theme(fig_pred, chart_title, x_axis_title, "Energy / Power (W)")
+                            st.plotly_chart(fig_pred, use_container_width=True)
+                    except Exception as e:
+                        st.caption(f"Could not render Daily Bar Chart: {e}")
+
+            sum_res = st.session_state.get("last_summary_result")
+            if isinstance(sum_res, dict):
+                st.markdown("---")
+                st.markdown("##### Aggregate Performance Summary")
+                metrics_block = sum_res.get("summary", sum_res.get("metrics", sum_res))
+                if isinstance(metrics_block, dict):
+                    scalar_items = [(k, v) for k, v in metrics_block.items() if isinstance(v, (int, float, str)) and not isinstance(v, bool)]
+                    if scalar_items:
+                        cols = st.columns(min(4, len(scalar_items)))
+                        for idx, (k, v) in enumerate(scalar_items[:8]):
+                            val_str = f"{v:,.3f}" if isinstance(v, float) else str(v)
+                            cols[idx % len(cols)].metric(k.replace("_", " ").title(), val_str)
+
+    with tab_anom:
+        st.markdown("#### Anomaly Detection")
+        if not st.session_state["active_workspace"]:
+            st.warning("⚠️ **No active model loaded.** Train a model in the **Train Model** tab first.")
+        else:
+            c1, c2, c3 = st.columns([2,2,1])
+            a_start = c1.text_input("Start Date (Optional)", key="anom_start", placeholder="YYYY-MM-DD")
+            a_end = c2.text_input("End Date (Optional)", key="anom_end", placeholder="YYYY-MM-DD")
+            if c3.button("Scan Anomalies", use_container_width=True):
+                form_data = {
+                    "workspace": st.session_state["active_workspace"],
+                    "version": st.session_state.get("active_model_version") or "latest",
+                    "dataset": st.session_state["dataset_profile"],
+                    "utc_offset_hours": st.session_state["utc_offset"],
+                    "start": a_start or None,
+                    "end": a_end or None,
+                    "include_rows": "true"
+                }
+                with st.spinner("Analyzing deviations..."):
+                    ok, status_code, payload = api_call("POST", "/anomalies/analyze", data=form_data, files=get_shared_file_tuple())
+                    if ok and isinstance(payload, dict):
+                        st.session_state["last_anomaly_result"] = payload
+                    else:
+                        render_api_error(status_code, payload, "POST /anomalies/analyze")
+
+            anom_res = st.session_state.get("last_anomaly_result")
+            if isinstance(anom_res, dict):
+                st.markdown("---")
+                st.markdown("##### Anomaly Scan Results")
+                anomaly_rows = anom_res.get("anomalies", anom_res.get("rows", []))
+                anomaly_count = anom_res.get("count", len(anomaly_rows) if isinstance(anomaly_rows, list) else 0)
+                
+                if anomaly_count == 0 or not anomaly_rows:
+                    render_status_pill("NORMAL")
+                    with st.container(border=True):
+                        st.markdown("##### ✅ No Anomalies Detected")
+                        st.write("Your solar plant generation aligns with expected model baselines. No underperformance or critical anomalies were flagged for the selected timeframe.")
+                else:
+                    render_status_pill("INVESTIGATE")
+                    st.write(f"⚠️ **{anomaly_count} potential anomaly intervals detected.**")
+                    
+                    if isinstance(anomaly_rows, list) and len(anomaly_rows) > 0:
+                        df_anom = pd.DataFrame(anomaly_rows)
+
+                        try:
+                            time_col = next((c for c in df_anom.columns if 'time' in c.lower() or 'date' in c.lower() or 'stamp' in c.lower()), df_anom.columns[0])
+                            val_col = next((c for c in df_anom.columns if 'observed' in c.lower() or 'power' in c.lower() or 'actual' in c.lower() or 'val' in c.lower()), df_anom.columns[1] if len(df_anom.columns) > 1 else df_anom.columns[0])
+                            sev_col = next((c for c in df_anom.columns if 'severity' in c.lower() or 'status' in c.lower()), None)
+
+                            df_anom[time_col] = pd.to_datetime(df_anom[time_col], errors='coerce')
+                            df_anom = df_anom.sort_values(by=time_col)
+
+                            chart_col1, chart_col2 = st.columns(2)
+
+                            with chart_col1:
+                                if sev_col:
+                                    severity_counts = df_anom[sev_col].astype(str).str.lower().value_counts()
+                                    fig_bar = go.Figure(go.Bar(
+                                        x=list(severity_counts.index),
+                                        y=list(severity_counts.values),
+                                        marker_color=[PALETTE["ALERT_CORAL"] if 'sig' in k or 'crit' in k else PALETTE["SOLAR_AMBER"] for k in severity_counts.index]
+                                    ))
+                                    fig_bar = apply_helioiq_plotly_theme(fig_bar, "Anomaly Count by Severity Type", "Severity Classification", "Number of Intervals")
+                                    st.plotly_chart(fig_bar, use_container_width=True)
+
+                            with chart_col2:
+                                fig_anom = go.Figure()
+                                if sev_col:
+                                    df_watch = df_anom[df_anom[sev_col].astype(str).str.lower().str.contains('watch|moderate|caution|warn')]
+                                    df_sig = df_anom[df_anom[sev_col].astype(str).str.lower().str.contains('significant|critical|high|outage|investigate')]
+                                else:
+                                    df_watch = pd.DataFrame()
+                                    df_sig = df_anom
+
+                                if not df_watch.empty:
+                                    fig_anom.add_trace(go.Scatter(
+                                        x=df_watch[time_col], y=pd.to_numeric(df_watch[val_col], errors='coerce'),
+                                        mode='markers', name='Moderate (Yellow)',
+                                        marker=dict(color=PALETTE["SOLAR_AMBER"], size=7, symbol='triangle-up')
+                                    ))
+
+                                if not df_sig.empty:
+                                    fig_anom.add_trace(go.Scatter(
+                                        x=df_sig[time_col], y=pd.to_numeric(df_sig[val_col], errors='coerce'),
+                                        mode='markers', name='Significant / Severe (Red)',
+                                        marker=dict(color=PALETTE["ALERT_CORAL"], size=8, symbol='x')
+                                    ))
+
+                                fig_anom = apply_helioiq_plotly_theme(fig_anom, "Anomaly Timeline Distribution", "Time", "Power Output (W)")
+                                st.plotly_chart(fig_anom, use_container_width=True)
+
+                        except Exception as e:
+                            st.caption(f"Could not render anomaly charts: {e}")
+
+                        st.dataframe(df_anom, use_container_width=True)
+
+                        with st.container(border=True):
+                            st.markdown("##### 🛠️ Anomaly Fixing & Resolution Guide")
+                            st.write("Different anomaly types require distinct troubleshooting protocols. Match the `severity` column in the table above to the appropriate fix steps below:")
+                            st.markdown("###### 🔴 **1. Significant Deviations & Critical Outages (Red - High Drop / 0 W Generation)**")
+                            st.markdown("- **Inverter & DC Hardware:** Check inverter error/fault logs, AC/DC disconnect switches, and blown DC string fuses.")
+                            st.markdown("- **Electrical Insulation:** Perform insulation resistance (Megger) tests for potential leakage to ground, MC4 connector arcing, or severe PID.")
+                            st.markdown("- **Grid & MPPT Voltage Constraints:** Inspect grid-side overvoltage trips, frequency anomalies, or inverter MPPT channel failures.")
+                            st.markdown("- **Mechanical & Tracker Failure:** Verify single-axis tracker drive motors, angular position sensor limits, and mechanical stowing faults.")
+                            st.markdown("###### 🟡 **2. Moderate Underperformance (Yellow - 'Watch' Severity)**")
+                            st.markdown("- **Soiling & Shading:** Inspect array surfaces for dust/soiling build-up, bird droppings, vegetation, or localized structural shading.")
+                            st.markdown("- **String Level Diagnostics:** Measure DC string current balanced ratios and review string-level IV curve traces.")
+                            st.markdown("- **Thermal Inspection:** Conduct handheld thermographic or drone IR scans to check for module thermal hotspots and bypassed diode strings.")
+                            st.markdown("- **Met Station Sensors:** Inspect pyranometer glass for dust and check module temperature sensor calibration drift.")
 
 
-# =====================================================================
-# 7. APPLICATION SHELL & SIDEBAR NAVIGATION GRID
-# =====================================================================
+def page_whatif() -> None:
+    st.markdown("## What-if Simulator")
+    st.write("Model hypothetical adjustments to solar irradiance, module temperature, and shading losses to forecast simulated energy yield.")
+    
+    if not st.session_state["shared_file_bytes"] or not st.session_state["active_workspace"]:
+        st.warning("⚠️ **Prerequisites Missing:** Please upload a dataset in the **Analysis Workspace** and train a model first.")
+        if st.button("Go to Analysis Workspace →", type="primary"):
+            navigate_to(PAGES[1])
+        return
+
+    with st.container(border=True):
+        st.markdown("##### ⚡ Quick Scenario Presets")
+        col_p1, col_p2, col_p3, col_p4 = st.columns(4)
+        if col_p1.button("☀️ Clear & Sunny (+20% Sun)", use_container_width=True):
+            st.session_state["sim_irr"] = 1.2
+            st.session_state["sim_temp"] = 0.0
+            st.session_state["sim_shade"] = 0.0
+        if col_p2.button("🍂 Heavy Soiling (15% Loss)", use_container_width=True):
+            st.session_state["sim_irr"] = 1.0
+            st.session_state["sim_temp"] = 0.0
+            st.session_state["sim_shade"] = 15.0
+        if col_p3.button("🔥 Extreme Heat (+10°C)", use_container_width=True):
+            st.session_state["sim_irr"] = 1.0
+            st.session_state["sim_temp"] = 10.0
+            st.session_state["sim_shade"] = 0.0
+        if col_p4.button("☁️ Overcast (-30% Sun)", use_container_width=True):
+            st.session_state["sim_irr"] = 0.7
+            st.session_state["sim_temp"] = -5.0
+            st.session_state["sim_shade"] = 0.0
+
+        st.markdown("##### 🎛️ Scenario Parameters")
+        c1, c2, c3 = st.columns(3)
+        irr_mult = c1.slider("Irradiance Scaling Multiplier", 0.3, 1.8, st.session_state.get("sim_irr", 1.0), 0.05)
+        temp_offset = c2.slider("Ambient Temperature Offset (°C)", -15.0, 25.0, st.session_state.get("sim_temp", 0.0), 1.0)
+        shading_loss = c3.slider("Shading / Soiling Loss Factor (%)", 0.0, 50.0, st.session_state.get("sim_shade", 0.0), 1.0)
+
+        if st.button("Run Simulation", type="primary", use_container_width=True):
+            hist_res = st.session_state.get("last_historical_result")
+            if not hist_res:
+                form_data = {
+                    "workspace": st.session_state["active_workspace"],
+                    "version": st.session_state.get("active_model_version") or "latest",
+                    "dataset": st.session_state["dataset_profile"],
+                    "utc_offset_hours": st.session_state["utc_offset"],
+                    "include_rows": "true",
+                }
+                ok, _, payload = api_call("POST", "/predictions/historical", data=form_data, files=get_shared_file_tuple())
+                if ok and isinstance(payload, dict):
+                    st.session_state["last_historical_result"] = payload
+                    hist_res = payload
+
+            if hist_res and isinstance(hist_res, dict):
+                rows = hist_res.get("rows", hist_res.get("data", []))
+                if isinstance(rows, list) and len(rows) > 0:
+                    df_sim = pd.DataFrame(rows)
+                    time_col = next((c for c in df_sim.columns if 'time' in c.lower() or 'date' in c.lower() or 'stamp' in c.lower()), df_sim.columns[0])
+                    expected_col = next((c for c in df_sim.columns if 'expected' in c.lower() or 'baseline' in c.lower() or 'predicted' in c.lower()), None)
+
+                    if expected_col:
+                        df_sim[time_col] = pd.to_datetime(df_sim[time_col], errors='coerce')
+                        df_sim = df_sim.sort_values(by=time_col)
+                        
+                        base_vals = pd.to_numeric(df_sim[expected_col], errors='coerce').fillna(0)
+                        temp_factor = 1.0 - (max(0.0, temp_offset) * 0.004)
+                        shading_factor = 1.0 - (shading_loss / 100.0)
+                        
+                        df_sim['simulated_power'] = base_vals * irr_mult * temp_factor * shading_factor
+
+                        df_sim['date'] = df_sim[time_col].dt.date
+                        df_daily_sim = df_sim.groupby('date').agg({
+                            'simulated_power': 'sum'
+                        }).reset_index()
+
+                        st.markdown("---")
+                        st.markdown("##### 📈 Simulated Energy Forecast")
+                        
+                        total_simulated = df_daily_sim['simulated_power'].sum()
+                        peak_power = df_daily_sim['simulated_power'].max()
+                        avg_daily = df_daily_sim['simulated_power'].mean()
+                        total_loss_est = shading_loss + max(0.0, temp_offset * 0.4)
+
+                        with st.container(border=True):
+                            st.markdown("##### 💡 Scenario Explanation")
+                            st.write(f"Under your configured scenario (**Irradiance multiplier**: `{irr_mult}x`, **Temperature offset**: `{temp_offset:+}°C`, **Soiling/Shading loss**: `{shading_loss}%`), your solar power plant is projected to generate a total simulated energy yield of **{total_simulated:,.1f} W** over the selected period.")
+                            if shading_loss > 0:
+                                st.write(f"⚠️ **Note:** The applied {shading_loss}% soiling loss reduces overall photovoltaic conversion efficiency.")
+                            if irr_mult > 1.0:
+                                st.write(f"☀️ **Note:** Increased sunlight intensity boosts overall output.")
+
+                        mc1, mc2, mc3, mc4 = st.columns(4)
+                        mc1.metric("Total Forecast Yield", f"{total_simulated:,.1f} W")
+                        mc2.metric("Peak Daily Output", f"{peak_power:,.1f} W")
+                        mc3.metric("Average Daily Output", f"{avg_daily:,.1f} W")
+                        mc4.metric("Est. Total Loss Impact", f"{total_loss_est:.1f}%")
+
+                        fig_sim = go.Figure()
+                        fig_sim.add_trace(go.Bar(
+                            x=df_daily_sim['date'], y=df_daily_sim['simulated_power'],
+                            name='Simulated Forecast', marker_color=PALETTE["SOLAR_AMBER"]
+                        ))
+                        fig_sim = apply_helioiq_plotly_theme(fig_sim, "Simulated Energy Yield Over Time", "Date", "Simulated Power (W)")
+                        st.plotly_chart(fig_sim, use_container_width=True)
+                    else:
+                        st.warning("Could not find expected baseline column in historical results.")
+                else:
+                    st.warning("No prediction rows available to run simulation.")
+            else:
+                st.warning("Please run predictions in the Analysis Workspace first to load baseline data.")
+
+
 def main() -> None:
     inject_helioiq_css()
     init_session_state()
-
-    with st.sidebar:
-        st.markdown(
-            f'<div style="padding:0.2rem 0 0.8rem 0; border-bottom:1px solid {PALETTE["STEEL_BLUE"]}; margin-bottom:0.8rem;"><div style="font-size:1.5rem; font-weight:800; letter-spacing:0.04em;">HELIO<span style="color:{PALETTE["ELECTRIC_CYAN"]};">IQ</span></div><div style="color:{PALETTE["MUTED_GREY"]}; font-size:0.8rem;">Solar PV Performance Intelligence</div></div>',
-            unsafe_allow_html=True,
-        )
-        st.caption("MODULE NAVIGATION GRID")
-
-        selected_page = st.radio(
-            "APPLICATION NAVIGATION",
-            options=PAGES,
-            index=PAGES.index(st.session_state["current_page"]),
-            label_visibility="collapsed",
-        )
-        if selected_page != st.session_state["current_page"]:
-            st.session_state["current_page"] = selected_page
-            st.rerun()
-
-        st.markdown("---")
-        with st.container(border=True):
-            st.caption("STATUS LEGEND")
-            st.markdown(
-                f'<div style="font-size:0.8rem; line-height:1.8;"><span style="color:{PALETTE["GREEN"]}; font-weight:700;">● Healthy / Normal</span><br/><span style="color:{PALETTE["AMBER"]}; font-weight:700;">▲ Watch / Caution</span><br/><span style="color:{PALETTE["RED"]}; font-weight:700;">■ Investigate Deviation</span></div>',
-                unsafe_allow_html=True,
-            )
-            st.caption("API GATEWAY")
-            st.code(API_BASE_URL, language=None)
-
-    # Persistent Top Bar
     render_top_bar()
 
-    # Route to selected page
     active = st.session_state["current_page"]
-    if active == PAGES[0]:
-        page_home()
-    elif active == PAGES[1]:
-        page_dataset_management()
-    elif active == PAGES[2]:
-        page_model_lab()
-    elif active == PAGES[3]:
-        page_performance_analysis()
-    elif active == PAGES[4]:
-        page_anomaly_detection()
-    elif active == PAGES[5]:
-        page_whatif_simulator()
-    elif active == PAGES[6]:
-        page_models_workspaces()
+    if active == PAGES[0]: page_home()
+    elif active == PAGES[1]: page_analysis()
+    elif active == PAGES[2]: page_whatif()
 
 
 if __name__ == "__main__":
